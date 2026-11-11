@@ -1,72 +1,42 @@
 # WebSCUMM
 
-TypeScript-движок и браузерные инструменты для SCUMM. Игровой режим исполняет скрипты из архивов SCUMM v5 для ПК. В Monkey Island CD проверены титры, сцена с дозорным, причал, вход в SCUMM Bar и начало разговора с заключённым в тюрьме. Интерфейс собран на Vue и Vite, как в [WebKyra](https://github.com/yanakulov/WebKyra).
+[Play](https://akulaflow.ru/webscummtest/) · [BYLE](https://akulaflow.ru/webscummtest/#byle) · [Room viewer](https://akulaflow.ru/webscummtest/#rooms) · [Русский README](README.ru.md)
 
-## Запуск
+WebSCUMM is a browser-based TypeScript runtime and toolkit for PC SCUMM v5, built with Vue and Vite in the same spirit as [WebKyra](https://github.com/yanakulov/WebKyra). It runs original game scripts and reads the rooms, costumes, and bitmap fonts from your local files.
 
-Нужен Node.js 24.
+## Playing
 
-```powershell
+Open **OPEN SCUMM DATA** and select the matching `.000` and `.001` files from your game. The browser reads both files locally.
+
+| Action | Control |
+| --- | --- |
+| Walk or interact | Click the scene or select a verb |
+| Skip a cutscene | Esc |
+| Advance dialogue | Period |
+
+The DOS CD edition of **The Secret of Monkey Island** has been tested through the opening, the dock, the entrance to the SCUMM Bar, and the start of the jail conversation. The DOS demo of **Indiana Jones and the Fate of Atlantis** has been tested at startup. The runtime still has incomplete opcode coverage. Audio playback and saved games are pending.
+
+## Tools
+
+- **BYLE** is a reconstruction of the costume animation editor. Press **F1** and open **BOUNCE** to try an editable example. The editor imports and exports SCUMM v5 `COST` and editable `.byle.json` files.
+- **Room viewer** displays room backgrounds, walk boxes, and depth masks.
+- **CHAR 1 exporter** adds all 66 Russian letters to the original Monkey Island CD font. Run `npm run font:char1 -- <game-directory>` to write a standalone `CHAR_0001` for use when repacking a copy of the game. The new glyphs use CP866 slots.
+
+## Local development
+
+Use Node.js 24 and npm.
+
+```sh
 npm ci
 npm run dev
-```
-
-Откройте [игровой режим](http://127.0.0.1:5174/) и через **OPEN SCUMM DATA** выберите оба файла, `.000` и `.001`. При запуске Vite с `WEBSCUMM_GAME_DIR` игра откроется сразу. **Esc** пропускает ролик, точка ускоряет диалог, левая кнопка мыши задаёт направление ходьбы или выбирает команду.
-
-[BYLE](http://127.0.0.1:5174/#byle) работает и без архива. При первом открытии появится справка, её также можно вызвать по **F1**. **FILE → ROOM VIEWER** открывает [просмотрщик комнат](http://127.0.0.1:5174/#rooms).
-
-## Как собрать анимацию
-
-Нажмите **ОТКРЫТЬ ПРИМЕР** в справке. В `BOUNCE` слева виден один рисунок, справа проигрывается последовательность `00 01 02 01`. **STOP** останавливает её, **STEP** показывает следующий кадр. Нижняя строка **LIST** подсвечивает текущий кадр.
-
-1. Выберите **FILE → NEW COSTUME**. Выберите цвет справа и нарисуйте первый кадр на левом поле. Правая кнопка стирает.
-2. Нажмите **CEL** под **START** и **STEP**. Кадр появится в **LIST**.
-3. Выберите `01` в верхней строке **CEL**, нарисуйте второй кадр и добавьте его в **LIST**. Нажмите **START**.
-
-**LIMB** выбирает слой, например тело или голову. **CHORE** выбирает действие, например ходьбу. Для каждой пары действия и направления есть свой список кадров на каждом слое. Shift-клик по ячейке **LIST** заменяет кадр, правый клик удаляет. **XREL** и **YREL** смещают следующие слои. Shift-клик уменьшает значение. **CHORES** управляет циклом и базовой позой предпросмотра.
-
-**FILE → SAVE COSTUME** сохраняет редактируемый `.byle.json` с палитрой. **FILE → MAKE COSTUME** собирает бинарный ресурс `COST` версии 5 (`.cost`), а **LOAD COSTUME** открывает оба формата. `COST` хранит индексы цветов, которые интерпретируются палитрой комнаты. Отдельно открытый `COST` отображается с запасной палитрой EGA и серыми цветами для остальных индексов. Исторический исходник `.byl` пока не читается.
-
-## Архив игры
-
-Выберите пару `.000` и `.001` с одинаковым именем. Архивы распознаются по структуре SCUMM v5. В BYLE команда **FILE → OPEN SCUMM DATA** загружает список `COST` и сохраняет открытый проект до выбора костюма. Поддержка рассчитана на индекс и один контейнер PC v5. Другие версии и многодисковые издания пока не проверены.
-
-Для локальной разработки можно указать каталог игры. Если в нём несколько пар, задайте имя через `WEBSCUMM_GAME_STEM`.
-
-```powershell
-$env:WEBSCUMM_GAME_DIR = 'D:\MONKEY1'
-npm run dev
-```
-
-Проверены два разных набора ресурсов: Monkey Island PC CD (83 комнаты, 119 костюмов) и DOS-демо Indiana Jones and the Fate of Atlantis (11 комнат, 20 костюмов). [Каталог демо ScummVM](https://www.scummvm.org/demos/)
-
-В Monkey Island у `COST 44` в chore `18`, `LEFT`, на слое `01` последовательность ног совпадает с архивным GIF. Чтобы собрать полный предпросмотр этой сцены, выберите `LEFT`, задайте chore `03` как **SET BASE POSE**, затем откройте `18`. Игровые данные не входят в сборку.
-
-## Источники интерфейса
-
-Главный экран, цвета и видимая часть латинского шрифта 3×5 восстановлены по кадрам VGHF. Файловый диалог реконструирован по описанию из руководства. [Архивный GIF](https://gamehistory.org/wp-content/uploads/2020/11/byle_000.gif) · [Демонстрация VGHF](https://gamehistory.org/monkeyisland/) · [Руководство SCUMM](https://tandell.com/misc/SCUMM-Tutorial-0.1.pdf#page=145)
-
-## CHAR 1 для перевода Monkey Island CD
-
-Справка BYLE использует оригинальные 8-пиксельные глифы и ширины `CHAR 1` с DOS CD. Добавлены 66 букв русского алфавита, включая `Ё` и `ё`. Одинаковые по начертанию латинские и кириллические буквы используют исходные рисунки. [Строка команд MI1 CD](https://www.scummvm.org/data/screenshots/scumm/monkey/monkey_dos_en_1_4_full.png) · [Оригинальный атлас CHAR 1](https://github.com/dbonates/MI-CHARfontEditor/blob/cdbee321f330c7fe36615945477ffa3a43bc40f4/char0001.bmp)
-
-```powershell
-npm run font:char1 -- 'D:\MONKEY1'
-```
-
-Команда сохраняет готовый блок SCUMM v5 `CHAR` в `.local/char1-ru/CHAR_0001`. Вторым аргументом можно задать другой выходной файл. Блок рассчитан на замену ресурса `CHAR_0001` при перепаковке копии игры. Исходные `.000` и `.001` открываются для чтения. [Формат CHAR](https://www.scummvm.org/old/docs/specs/char.php) · [Работа с CHAR в ScummTR](https://github.com/dwatteau/scummtr/blob/main/FAQ.md#where-are-the-fonts-stored)
-
-Для текста перевода используйте CP866. Функция `encodeChar1RussianText` в `src/fonts/char1-russian.ts` переводит обычный текст с русскими буквами в нужные байты. Кодирование команд SCUMM остаётся задачей упаковщика строк. Русские буквы занимают `80–AF`, `E0–F1` (hex), включая часть западноевропейских позиций. Остальные слоты, в том числе ASCII, сохраняют исходные глифы. `CHAR 1` покрывает строку команд и меню сохранения. Для полной локализации отдельно понадобятся другие наборы `CHAR` и перевод самих строк. [Служебные коды SCUMM](https://github.com/dwatteau/scummtr/blob/main/FAQ.md#what-are-all-these-weird-123456789-symbols)
-
-## Состояние движка
-
-После загрузки архива движок исполняет глобальный скрипт 1. Глобальные и локальные скрипты выполняются до команды ожидания или завершения, а при смене комнаты запускаются её обработчики выхода и входа. Персонажи двигаются по областям `BOXD` и маршрутам `BOXM`. Рисование использует игровые `SMAP`, `COST`, маски глубины и растровые `CHAR`. Щелчки по экрану и панели обрабатывают игровые скрипты. [Руководство SCUMM](https://tandell.com/misc/SCUMM-Tutorial-0.1.pdf) · [Байткод SCUMM v5](https://www.scummvm.org/old/docs/specs/scrp-v5.php)
-
-В DOS-демо Indiana Jones and the Fate of Atlantis проверен запуск, дальнейший игровой маршрут не проверялся. Воспроизведение звука и сохранения ещё не реализованы. Таймеры позволяют пройти начальные сцены Monkey Island CD без аудиодорожек. Поддержка байткода неполная. Если скрипт обращается к неизвестной команде, плеер показывает номер скрипта и смещение.
-
-```powershell
 npm test
 npm run build
 ```
 
-Тесты проверяют самостоятельный экспорт и повторный импорт `COST`. С `WEBSCUMM_GAME_DIR`, указывающим на Monkey Island PC CD, они декодируют комнаты и костюмы, проходят вступление, проверяют плакат на причале и вход в SCUMM Bar, затем проверяют анимацию факелов и начало диалога в тюрьме.
+Vite serves the app at [127.0.0.1:5174](http://127.0.0.1:5174/). Set `WEBSCUMM_GAME_DIR` to load a local archive pair automatically in development. Set `WEBSCUMM_GAME_STEM` if the directory contains several pairs. When the directory points to Monkey Island DOS CD, the test suite also exercises the original game data.
+
+## Engine notes
+
+SCUMM starts at global script 1. The runtime schedules scripts across frames, runs room entry and exit handlers, and follows routes defined by `BOXD` and `BOXM`. Rendering uses the game's indexed graphics, `COST` animation tracks, depth masks, and `CHAR` fonts. The game scripts handle pointer input and verb selection. [SCUMM tutorial](https://tandell.com/misc/SCUMM-Tutorial-0.1.pdf) · [SCUMM v5 opcode reference](https://www.scummvm.org/old/docs/specs/scrp-v5.php) · [VGHF footage of BYLE](https://gamehistory.org/monkeyisland/)
+
+Original games and tools © Lucasfilm Games / LucasArts. WebSCUMM by [Yan Akulov and AkulaFlow](https://akulaflow.ru/). Supply your own game archives.

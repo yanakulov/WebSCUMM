@@ -1,0 +1,72 @@
+name: Check and publish WebSCUMM
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        with:
+          name: webscumm-dist
+          path: dist
+          if-no-files-found: error
+
+  publish:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    concurrency:
+      group: webscumm-publish
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: webscumm-dist
+          path: dist
+      - name: Publish the static build
+        shell: bash
+        run: |
+          latest=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [ "$GITHUB_SHA" != "$latest" ]; then
+            echo 'A newer main commit is ready to build.'
+            exit 0
+          fi
+
+          publish="$RUNNER_TEMP/webscumm-publish"
+          if git ls-remote --exit-code origin refs/heads/deploy >/dev/null; then
+            git fetch --depth=1 origin refs/heads/deploy
+            git worktree add --detach "$publish" FETCH_HEAD
+            git -C "$publish" rm -rf -- .
+          else
+            git worktree add --detach "$publish" HEAD
+            git -C "$publish" switch --orphan webscumm-dist
+          fi
+
+          cp -R dist/. "$publish/"
+          printf '%s\n' "$GITHUB_SHA" > "$publish/revision.txt"
+          git -C "$publish" add --all
+          if git -C "$publish" diff --cached --quiet; then exit 0; fi
+          git -C "$publish" -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m "Deploy $GITHUB_SHA"
+          git -C "$publish" push origin HEAD:refs/heads/deploy

@@ -1,0 +1,17 @@
+[Unit]
+Description=Publish the latest WebSCUMM static build
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=webscumm-deploy
+Group=webscumm-deploy
+ExecStart=/usr/local/lib/webscummtest/pull-release.sh
+TimeoutStartSec=45
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/www/webscummtest /var/lib/webscummtest
+UMask=0022
