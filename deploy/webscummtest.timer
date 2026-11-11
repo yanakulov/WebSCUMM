@@ -1,0 +1,10 @@
+[Unit]
+Description=Check for a new WebSCUMM build
+
+[Timer]
+OnBootSec=20s
+OnUnitActiveSec=60s
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target
