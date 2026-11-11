@@ -1,9 +1,9 @@
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import { GameArchive } from '../src/engine/archive.ts';
-import { readMonochromeCharset, replaceMonochromeGlyphs } from '../src/engine/charset.ts';
-import { char1Latin } from '../src/fonts/char1-latin.ts';
-import { char1Russian, char1RussianSlots } from '../src/fonts/char1-russian.ts';
+import { GameArchive } from '../../src/engine/archive.ts';
+import { readMonochromeCharset, replaceMonochromeGlyphs } from '../../src/engine/charset.ts';
+import { char1Latin } from '../fonts/char1-latin.ts';
+import { char1Russian, char1RussianSlots } from '../fonts/char1-russian.ts';
 
 const [directory = process.env.WEBSCUMM_GAME_DIR, filename = '.local/char1-ru/CHAR_0001'] = process.argv.slice(2);
 if (!directory) throw new Error('Usage: npm run font:char1 -- <Monkey Island DOS CD directory> [output file]');

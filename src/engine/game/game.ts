@@ -3,7 +3,7 @@ import type { Costume, Track } from '../costume.ts';
 import type { RGB } from '../palette.ts';
 import { measureText, type GameFont } from './font.ts';
 import type { ObjectImage, Scene, SceneObject } from './scene.ts';
-import { archiveResources, MONKEY1_CD, type GameResources } from './resources.ts';
+import { archiveResources, type GameResources } from './resources.ts';
 import { ScummVM, VAR, type Script } from './vm.ts';
 import { locateBox, walkPath, type Point } from './walk.ts';
 
@@ -53,7 +53,7 @@ export class ScummGame {
   private readonly costumes = new Map<number, Costume>();
   private readonly fonts = new Map<number, GameFont>();
   private readonly objectImages = new Map<string, ObjectImage | undefined>();
-  private readonly cutscenes: { script: Script; argument: number; override?: number }[] = [];
+  private readonly cutscenes: { script: Script; argument: number; override?: number; skipRequested?: boolean }[] = [];
   private readonly clicks: { x: number; y: number; button: number; verb?: number }[] = [];
   private readonly sentences: { args: number[]; frozen: number }[] = [];
   cutsceneStarting?: Script;
@@ -97,8 +97,7 @@ export class ScummGame {
     variables[VAR.soundCard] = 3;
     variables[VAR.inputMode] = 3;
     variables[VAR.talkY] = -80;
-    // The DOS CD interpreter supplies the track-B sector count to the boot script.
-    if (this.resources.edition === MONKEY1_CD) variables[74] = 1225;
+    for (const [id, value] of Object.entries(this.resources.bootVariables ?? {})) variables[Number(id)] = value;
     this.protect(() => this.vm.start(1, [0]));
   }
 
@@ -481,7 +480,10 @@ export class ScummGame {
 
   setOverride(script: Script, target: number | undefined) {
     const active = this.cutscenes.at(-1);
-    if (active) { active.script = script; active.override = target; }
+    if (!active) return;
+    active.script = script;
+    active.override = target;
+    if (target !== undefined && active.skipRequested) this.skipCutscene();
   }
 
   endCutscene() {
@@ -496,6 +498,8 @@ export class ScummGame {
     cutscene.script.pc = cutscene.override;
     cutscene.script.delay = 0;
     cutscene.script.frozen = 0;
+    cutscene.override = undefined;
+    cutscene.skipRequested = false;
     this.vm.variables[VAR.override] = 1;
     this.clearMessage();
     return true;
@@ -511,6 +515,16 @@ export class ScummGame {
 
   click(x: number, y: number, button: number, verbId?: number) {
     if (!this.error && !this.stopped && this.vm.variables[VAR.userInput] > 0) this.clicks.push({ x, y, button, verb: verbId });
+  }
+
+  tap(x: number, y: number, verbId?: number) {
+    this.protect(() => {
+      if (this.message) { this.nextMessage(); return; }
+      if (this.skipCutscene()) return;
+      const active = this.cutscenes.at(-1);
+      if (active && !active.script.done) { active.skipRequested = true; return; }
+      this.click(x, y, 1, verbId);
+    });
   }
 
   key(key: number) {

@@ -1,4 +1,4 @@
-import type { CharsetGlyph } from '../engine/charset.ts';
+import type { CharsetGlyph } from '../../src/engine/charset.ts';
 import { char1Latin } from './char1-latin.ts';
 
 const uppercase = 'АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ';

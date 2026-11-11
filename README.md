@@ -8,27 +8,23 @@ WebSCUMM is a browser-based TypeScript runtime and toolkit for PC SCUMM v5, buil
 
 Open [the game](https://akulaflow.ru/webscummtest/). The intro starts once the browser loads the prepared resource pack. If the pack cannot be loaded, **OPEN LOCAL CD DATA** accepts the matching `.000` and `.001` files from the supported edition.
 
-| Action | Control |
-| --- | --- |
-| Walk or interact | Click the scene or select a verb |
-| Skip a cutscene | Esc |
-| Advance dialogue | Period |
+| Action | Mouse and keyboard | Touchscreen |
+| --- | --- | --- |
+| Move the cursor | Move the mouse | Swipe in the game area |
+| Walk or interact | Click the scene or a verb | Tap to act at the cursor |
+| Skip the intro or a skippable cutscene | Esc | Tap during the sequence |
+| Advance dialogue | Period | Tap while a line is visible |
 
-The opening, the dock, the entrance to the SCUMM Bar, and the start of the jail conversation have been tested. The runtime still has incomplete opcode coverage. Audio playback and saved games are pending.
+On a touchscreen, the cursor keeps its position between swipes. Releasing after a swipe leaves it in place.
+
+[Monkey Island resources and compatibility](TSoMI/README.md)
 
 ## Tools
 
 - **BYLE** is a reconstruction of the costume animation editor. Press **F1** and open **BOUNCE** to try an editable example. The editor imports and exports SCUMM v5 `COST` and editable `.byle.json` files.
 - **Room viewer** displays room backgrounds, walk boxes, and depth masks.
-- **CHAR 1 exporter** adds all 66 Russian letters to the original Monkey Island CD font. Run `npm run font:char1 -- <game-directory>` to write a standalone `CHAR_0001` for use when repacking a copy of the game. The new glyphs use CP866 slots.
 
 BYLE and the room viewer accept other compatible PC SCUMM v5 archive pairs.
-
-## Web resource pack
-
-The published `WSC1` pack contains decoded indexed graphics, palettes, depth masks, costume frames, bitmap fonts, and the game’s scripts. A JSON directory indexes the binary payload, and gzip compresses the resulting file. The original `.000` and `.001` archives, DOS executable, drivers, and audio tracks stay outside Git and the site.
-
-Rebuild the pack from a local English DOS CD installation with `npm run assets:monkey -- <game-directory>`. The command writes `public/assets/monkey1.wsc.gz`.
 
 ## Local development
 

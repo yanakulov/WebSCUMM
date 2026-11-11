@@ -1,10 +1,11 @@
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { gzipSync } from 'node:zlib';
-import { GameArchive } from '../src/engine/archive.ts';
-import { encodeMonkeyPack, MONKEY_PACK_PATH, packCostume, type MonkeyPack, type PackedScene } from '../src/engine/game/pack.ts';
-import { archiveResources, MONKEY1_CD } from '../src/engine/game/resources.ts';
-import { readObjectVerbs } from '../src/engine/game/scene.ts';
+import { fileURLToPath } from 'node:url';
+import { GameArchive } from '../../src/engine/archive.ts';
+import { readObjectVerbs } from '../../src/engine/game/scene.ts';
+import { monkeyCdResources, MONKEY1_CD } from '../game.ts';
+import { encodeMonkeyPack, packCostume, type MonkeyPack, type PackedScene } from '../pack.ts';
 
 const directory = process.argv[2];
 if (!directory) throw new Error('Usage: npm run assets:monkey -- <game-directory> [output]');
@@ -16,8 +17,8 @@ const pairs = names.filter(name => /^(MONKEY1|MONKEY)\.000$/i.test(name)).flatMa
 if (pairs.length !== 1) throw new Error('Expected one Monkey Island DOS CD archive pair');
 const [{ index, disk }] = pairs;
 const archive = new GameArchive(await readFile(join(directory, index)), await readFile(join(directory, disk)));
-const resources = archiveResources(archive);
-if (resources.edition !== MONKEY1_CD) throw new Error('Only the English Monkey Island DOS CD edition is supported');
+const resources = monkeyCdResources(archive);
+if (!resources) throw new Error('Only the English Monkey Island DOS CD edition is supported');
 
 const pack: MonkeyPack = {
   edition: MONKEY1_CD, variableCount: resources.variableCount, bitVariableCount: resources.bitVariableCount,
@@ -61,7 +62,7 @@ for (const { id } of archive.resources('DSOU')) {
   if (cue) pack.sounds[id] = cue;
 }
 
-const output = resolve(process.argv[3] ?? join('public', MONKEY_PACK_PATH));
+const output = resolve(process.argv[3] ?? fileURLToPath(new URL('../assets/monkey1.wsc.gz', import.meta.url)));
 const packed = gzipSync(encodeMonkeyPack(pack), { level: 9 });
 await mkdir(dirname(output), { recursive: true });
 await writeFile(output, packed);

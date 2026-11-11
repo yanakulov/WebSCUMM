@@ -6,7 +6,7 @@ import { HEIGHT, WIDTH, hitVerb, renderGame } from './engine/game/render.ts';
 import type { GameResources } from './engine/game/resources.ts';
 import { paintIndexed } from './render.ts';
 
-const props = defineProps<{ source?: GameResources; paused: boolean; loading: boolean; loadError: string }>();
+const props = defineProps<{ title: string; source?: GameResources; paused: boolean; loading: boolean; loadError: string }>();
 const emit = defineEmits<{ open: [] }>();
 const canvas = ref<HTMLCanvasElement>();
 const error = ref('');
@@ -15,15 +15,21 @@ const pixels = new Uint8Array(WIDTH * HEIGHT);
 let game: ScummGame | undefined;
 let frame = 0;
 let last = 0;
+let cursor = { x: WIDTH / 2, y: HEIGHT / 2 };
+let touch: { id: number; x: number; y: number; travel: number; cancelled: boolean } | undefined;
+const tapTravel = 6;
 
 function start(source = props.source) {
   error.value = '';
   stopped.value = false;
+  touch = undefined;
+  cursor = { x: WIDTH / 2, y: HEIGHT / 2 };
   game = source ? new ScummGame(source) : undefined;
   game?.boot();
   void nextTick(() => canvas.value?.focus());
 }
 watch(() => props.source, source => start(source), { immediate: true });
+watch(() => props.paused, paused => { if (paused) touch = undefined; });
 
 function loop(now: number) {
   const elapsed = last ? (now - last) / 1000 : 0;
@@ -44,24 +50,65 @@ function loop(now: number) {
 onMounted(() => { frame = requestAnimationFrame(loop); });
 onUnmounted(() => cancelAnimationFrame(frame));
 
-function point(event: PointerEvent) {
-  if (!game || !canvas.value || error.value) return;
-  const rect = canvas.value.getBoundingClientRect();
-  const x = Math.floor((event.clientX - rect.left) * WIDTH / rect.width);
-  const y = Math.floor((event.clientY - rect.top) * HEIGHT / rect.height);
+function acceptsInput() {
+  return game && canvas.value && !props.paused && !error.value && !stopped.value;
+}
+
+function setCursor(x: number, y: number) {
+  cursor = { x: Math.max(0, Math.min(WIDTH - 1, x)), y: Math.max(0, Math.min(HEIGHT - 1, y)) };
+  x = Math.floor(cursor.x);
+  y = Math.floor(cursor.y);
+  if (!game) return { x, y, verb: undefined };
   game.point(x, y);
-  game.pointerVisible = event.pointerType === 'mouse';
+  game.pointerVisible = true;
   const verb = hitVerb(game, x, y)?.id;
   game.hoverVerb = verb ?? 0;
   return { x, y, verb };
 }
 
-function leave() { if (game) { game.pointerVisible = false; game.hoverVerb = 0; } }
+function move(event: PointerEvent) {
+  if (!acceptsInput()) return;
+  const rect = canvas.value!.getBoundingClientRect();
+  if (event.pointerType !== 'touch') {
+    return setCursor((event.clientX - rect.left) * WIDTH / rect.width, (event.clientY - rect.top) * HEIGHT / rect.height);
+  }
+  if (!touch || touch.id !== event.pointerId || touch.cancelled) return;
+  const dx = event.clientX - touch.x, dy = event.clientY - touch.y;
+  touch.travel += Math.hypot(dx, dy);
+  touch.x = event.clientX;
+  touch.y = event.clientY;
+  return setCursor(cursor.x + dx * WIDTH / rect.width, cursor.y + dy * HEIGHT / rect.height);
+}
 
-function click(event: PointerEvent) {
-  if ((event.button !== 0 && event.button !== 2) || props.paused) return;
-  const hit = point(event);
+function down(event: PointerEvent) {
+  if (!acceptsInput()) return;
+  if (event.pointerType === 'touch') {
+    if (touch) { touch.cancelled = true; return; }
+    if (!event.isPrimary) return;
+    touch = { id: event.pointerId, x: event.clientX, y: event.clientY, travel: 0, cancelled: false };
+    canvas.value!.setPointerCapture(event.pointerId);
+    setCursor(cursor.x, cursor.y);
+    return;
+  }
+  if (event.button !== 0 && event.button !== 2) return;
+  const hit = move(event);
   if (hit) game?.click(hit.x, hit.y, event.button === 2 ? 2 : 1, hit.verb);
+}
+
+function up(event: PointerEvent) {
+  if (!touch || touch.id !== event.pointerId) return;
+  const hit = move(event);
+  const tapped = !touch.cancelled && touch.travel < tapTravel;
+  touch = undefined;
+  if (hit && tapped) game?.tap(hit.x, hit.y, hit.verb);
+}
+
+function cancel(event: PointerEvent) {
+  if (touch?.id === event.pointerId) touch = undefined;
+}
+
+function leave(event: PointerEvent) {
+  if (game && event.pointerType !== 'touch') { game.pointerVisible = false; game.hoverVerb = 0; }
 }
 
 const specialKeys: Record<string, number> = { Escape: 27, Enter: 13, Backspace: 8 };
@@ -76,10 +123,11 @@ function key(event: KeyboardEvent) {
 </script>
 
 <template>
-  <section v-if="source" class="game-player" aria-label="Monkey Island player">
+  <section v-if="source" class="game-player" :aria-label="title">
     <canvas ref="canvas" :width="WIDTH" :height="HEIGHT" class="game-display" tabindex="0"
-      aria-label="SCUMM game screen. Press Escape to skip a cutscene."
-      @pointermove="point" @pointerdown="click" @pointerleave="leave" @keydown="key" @contextmenu.prevent />
+      aria-label="SCUMM game screen. Press Escape or tap to skip a cutscene. Swipe to move the cursor."
+      @pointermove="move" @pointerdown="down" @pointerup="up" @pointercancel="cancel" @lostpointercapture="cancel"
+      @pointerleave="leave" @keydown="key" @contextmenu.prevent />
     <div v-if="error || stopped" class="game-status" role="status">
       <p>{{ error || 'The game has ended.' }}</p>
       <div class="retro-actions">
@@ -89,7 +137,7 @@ function key(event: KeyboardEvent) {
     </div>
   </section>
   <section v-else class="game-start" aria-label="WebSCUMM">
-    <h1><PixelText text="THE SECRET OF MONKEY ISLAND" /></h1>
+    <h1><PixelText :text="title" /></h1>
     <PixelText v-if="loading" text="LOADING GAME DATA..." role="status" />
     <template v-else>
       <p v-if="loadError" class="pack-error" role="status">{{ loadError }}</p>

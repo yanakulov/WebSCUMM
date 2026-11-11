@@ -1,5 +1,5 @@
-import { char1Latin } from '../fonts/char1-latin.ts';
-import { char1Russian } from '../fonts/char1-russian.ts';
+import { char1Latin } from '../../TSoMI/fonts/char1-latin.ts';
+import { char1Russian } from '../../TSoMI/fonts/char1-russian.ts';
 
 // BYLE uses 3 × 5 pixel letters with a one-pixel advance between them.
 const alphabet: Record<string, string> = {
