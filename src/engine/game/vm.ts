@@ -5,7 +5,7 @@ export const VAR = {
   result: 0, ego: 1, cameraX: 2, message: 3, room: 4, override: 5, machineSpeed: 6, lights: 9,
   timer1: 11, timer2: 12, timer3: 13, music: 14, cameraMin: 17, cameraMax: 18, nextFrame: 19,
   virtualX: 20, virtualY: 21, roomResource: 22, lastSound: 23, cutsceneKey: 24, talkActor: 25,
-  entry: 28, entry2: 29, exit: 30, exit2: 31, input: 32, sentence: 33, cutsceneStart: 35,
+  cameraFastX: 26, scroll: 27, entry: 28, entry2: 29, exit: 30, exit2: 31, input: 32, sentence: 33, cutsceneStart: 35,
   cutsceneEnd: 36, charIncrement: 37, debug: 39, mouseX: 44, mouseY: 45, timer: 46, total: 47,
   soundCard: 48, videoMode: 49, cursor: 52, userInput: 53, talkY: 54, inputMode: 67,
 } as const;

@@ -17,6 +17,13 @@ function start(random = () => 0.5) {
   return game;
 }
 
+function seededRandom(seed: number) {
+  return () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 2 ** 32;
+  };
+}
+
 function advanceUntil(game: ScummGame, condition: () => boolean, timeout: number) {
   const pixels = new Uint8Array(WIDTH * HEIGHT);
   for (let i = 0; i <= timeout * 60; i++) {
@@ -46,7 +53,7 @@ test('the web pack executes the original credits, lookout dialogue and part card
 });
 
 test('the web pack can skip cutscenes, read the dock poster and enter the SCUMM Bar', () => {
-  const game = start();
+  const game = start(seededRandom(45));
   advanceUntil(game, () => game.room === 10 && game.vm.variables[14] >= 1260, 25);
   game.key(27);
   advanceUntil(game, () => game.room === 38, 2);
@@ -72,14 +79,32 @@ test('the web pack can skip cutscenes, read the dock poster and enter the SCUMM 
   game.click(710 - game.viewX, 106, 1);
   const bar = advanceUntil(game, () => game.room === 28 && !game.actor(1).target, 10);
   assert.ok(new Set(bar).size > 40);
+  assert.ok(animationFrames(game, 152, 24, 64, 48) > 1, 'the chandelier animates');
+
+  game.walk(game.actor(1), 472, 125);
+  advanceUntil(game, () => !game.actor(1).target && game.camera === 480, 20);
+  assert.equal(animationFrames(game, 520, 80, 16, 16), 3, 'the fireplace draws all three frames');
+  advanceUntil(game, () => game.actor(6).room === 28 && !!game.actor(6).target, 60);
 });
 
+function animationFrames(game: ScummGame, x: number, y: number, width: number, height: number) {
+  const frames = new Set<string>();
+  const pixels = new Uint8Array(WIDTH * HEIGHT);
+  for (let i = 0; i < 36; i++) {
+    game.advance(0.1);
+    assert.equal(game.error, '');
+    renderGame(game, pixels);
+    const left = x - game.viewX;
+    frames.add(Array.from({ length: height }, (_, row) => {
+      const start = (y + row) * WIDTH + left;
+      return pixels.subarray(start, start + width).join(',');
+    }).join('/'));
+  }
+  return frames.size;
+}
+
 test('the web pack cycles all three jail torches and allows talking to the prisoner', () => {
-  let seed = 42;
-  const game = start(() => {
-    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-    return seed / 2 ** 32;
-  });
+  const game = start(seededRandom(42));
   const ego = () => game.actor(1);
   const settled = () => !ego().target && game.camera === game.cameraTarget && game.vm.variables[53] > 0;
   const walk = (x: number, y: number) => {
@@ -146,4 +171,37 @@ test('a tap skips the title before its override is armed and advances in-game di
   assert.equal(String.fromCharCode(...game.message!.pages[0]), 'Re-elect Governor Marley.');
   game.tap(160, 100);
   assert.equal(String.fromCharCode(...game.message!.pages[0]), "`When there's only one candidate, there's only one choice.`");
+});
+
+test('Guybrush keeps his eye pixel and the camera follows only past the dock trigger', () => {
+  const game = start();
+  advanceUntil(game, () => game.room === 10, 2);
+  game.tap(160, 100);
+  advanceUntil(game, () => game.room === 38, 5);
+  game.tap(160, 100);
+  const pixels = advanceUntil(game, () => game.room === 33 && !game.actor(1).target && game.camera === game.cameraTarget, 35);
+  const ego = game.actor(1);
+  const costume = game.getCostume(ego.costume);
+  assert.equal(ego.scaleX, 210);
+  const eye = (ego.y - 35) * WIDTH + ego.x - game.viewX + 1;
+  assert.equal(pixels[eye], costume.paletteIndices![7]);
+
+  game.chore(ego, ego.talkChore);
+  game.face(ego, 3);
+  assert.equal(ego.limbs[0]?.track?.cels[0], 21, 'standing body turns with the talking head');
+  assert.equal(ego.limbs[1]?.track?.cels[0], 12);
+
+  const initialCamera = game.camera;
+  game.walk(ego, ego.x + 40, ego.y);
+  advanceUntil(game, () => !ego.target, 10);
+  assert.equal(game.camera, initialCamera);
+  game.walk(ego, ego.x + 192, ego.y);
+  let previous = game.camera;
+  for (let i = 0; i < 80 && (ego.target || game.camera !== game.cameraTarget); i++) {
+    game.advance(0.1);
+    assert.ok([0, 8].includes(game.camera - previous));
+    previous = game.camera;
+  }
+  assert.equal(game.error, '');
+  assert.ok(!ego.target && game.camera > initialCamera);
 });

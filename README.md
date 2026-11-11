@@ -43,4 +43,6 @@ Vite serves the app at [127.0.0.1:5174](http://127.0.0.1:5174/). Set `WEBSCUMM_G
 
 SCUMM starts at global script 1. The runtime schedules scripts across frames, runs room entry and exit handlers, and follows routes defined by `BOXD` and `BOXM`. Rendering uses the game's indexed graphics, `COST` animation tracks, depth masks, and `CHAR` fonts. The game scripts handle pointer input and verb selection. [SCUMM tutorial](https://tandell.com/misc/SCUMM-Tutorial-0.1.pdf) · [SCUMM v5 opcode reference](https://www.scummvm.org/old/docs/specs/scrp-v5.php) · [VGHF footage of BYLE](https://gamehistory.org/monkeyisland/)
 
+The classic costume renderer uses the original row and column scaling thresholds and tracks each limb independently. The camera follows after the actor crosses a trigger and scrolls in eight-pixel strips.
+
 Original games and tools © Lucasfilm Games / LucasArts. WebSCUMM by [Yan Akulov and AkulaFlow](https://akulaflow.ru/).

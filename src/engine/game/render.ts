@@ -1,7 +1,7 @@
-import { frameSlots } from '../../render.ts';
 import type { ScummGame, Actor, Message, Verb } from './game.ts';
 import { measureText, type GameFont } from './font.ts';
 import { VAR } from './vm.ts';
+import { scaleOffset, scalePhase, scalePixel } from './costume-scale.ts';
 
 export const WIDTH = 320;
 export const HEIGHT = 200;
@@ -61,39 +61,43 @@ export function renderGame(game: ScummGame, pixels: Uint8Array) {
 function drawActor(game: ScummGame, pixels: Uint8Array, actor: Actor, occluders: Occluder[]) {
   const scene = game.scene!;
   const costume = game.getCostume(actor.costume);
-  const mirror = actor.direction === 0 && !costume.sourceFacing;
-  const sx = actor.scaleX / 255, sy = actor.scaleY / 255;
+  const step = actor.direction === 0 && !costume.sourceFacing ? -1 : 1;
+  const scaled = actor.scaleX !== 255 || actor.scaleY !== 255;
   const depth = actor.clip || (actor.ignoreBoxes ? 0 : scene.boxes[actor.walkBox - 1]?.mask ?? 0);
   const plane = depth > 0 ? scene.masks[Math.min(depth, scene.masks.length) - 1] : undefined;
   const masks = plane ? occluders.flatMap(image => {
     const layer = image.masks.find(mask => mask.tag === plane.tag);
     return layer ? [{ ...image, pixels: layer.pixels }] : [];
   }) : [];
-  let x = Math.round(actor.x) - game.viewX, y = Math.round(actor.y - actor.elevation) + game.screenTop;
+  const x = Math.floor(actor.x) - game.viewX, y = Math.floor(actor.y) - actor.elevation + game.screenTop;
+  let moveX = 0, moveY = 0;
   for (const [i, limb] of actor.limbs.entries()) {
-    if (!limb || limb.hidden) continue;
-    const slots = frameSlots(limb.track);
-    const frame = limb.track.loop ? limb.tick % slots.length : Math.min(limb.tick, slots.length - 1);
-    const cel = costume.limbs[i][limb.track.cels[slots[frame]]];
+    if (!limb?.track || limb.hidden) continue;
+    const cel = costume.limbs[i][limb.track.cels[limb.frame]];
     if (!cel) continue;
-    const left = x + Math.round((mirror ? -cel.x - cel.width : cel.x) * sx);
-    const top = y + Math.round(cel.y * sy);
-    const width = Math.max(1, Math.round(cel.width * sx)), height = Math.max(1, Math.round(cel.height * sy));
-    for (let row = Math.max(0, game.screenTop - top); row < Math.min(height, game.screenBottom - top); row++) {
-      const dy = top + row;
-      const sourceY = Math.min(cel.height - 1, Math.floor(row / sy));
-      for (let col = Math.max(0, -left); col < Math.min(width, WIDTH - left); col++) {
-        const dx = left + col;
-        const sourceX = Math.min(cel.width - 1, Math.floor(col / sx));
-        const ink = cel.pixels[sourceY * cel.width + (mirror ? cel.width - 1 - sourceX : sourceX)];
-        if (!ink || plane?.pixels[(dy - game.screenTop) * scene.width + dx + game.viewX]) continue;
-        if (masks.some(mask => dx >= mask.x && dx < mask.x + mask.width && dy >= mask.y && dy < mask.y + mask.height &&
-          mask.pixels[(dy - mask.y) * mask.width + dx - mask.x])) continue;
-        pixels[dy * WIDTH + dx] = actor.palette.get(ink) ?? costume.paletteIndices?.[ink] ?? ink;
+    const offsetX = moveX + cel.x, offsetY = moveY + cel.y;
+    moveX += cel.moveX;
+    moveY -= cel.moveY;
+    const dx = x + step * (scaled ? scaleOffset(offsetX, actor.scaleX, step) : offsetX);
+    let dy = y + (scaled ? scaleOffset(offsetY, actor.scaleY, 1) : offsetY);
+    const phaseX = scalePhase(offsetX, step), phaseY = scalePhase(offsetY, 1);
+    for (let row = 0; row < cel.height && dy < game.screenBottom; row++) {
+      if (!scalePixel(actor.scaleY, phaseY + row)) continue;
+      if (dy >= game.screenTop) {
+        let columnX = dx;
+        for (let col = 0; col < cel.width; col++) {
+          const ink = cel.pixels[row * cel.width + col];
+          if (ink && columnX >= 0 && columnX < WIDTH &&
+            !plane?.pixels[(dy - game.screenTop) * scene.width + columnX + game.viewX] &&
+            !masks.some(mask => columnX >= mask.x && columnX < mask.x + mask.width && dy >= mask.y && dy < mask.y + mask.height &&
+              mask.pixels[(dy - mask.y) * mask.width + columnX - mask.x])) {
+            pixels[dy * WIDTH + columnX] = actor.palette.get(ink) ?? costume.paletteIndices?.[ink] ?? ink;
+          }
+          if (scalePixel(actor.scaleX, phaseX + col * step)) columnX += step;
+        }
       }
+      dy++;
     }
-    x += Math.round((mirror ? -cel.moveX : cel.moveX) * sx);
-    y -= Math.round(cel.moveY * sy);
   }
 }
 
