@@ -78,18 +78,30 @@ export function readObjectImage(archive: GameArchive, object: SceneObject, state
   return { pixels, opacity, masks, width: object.width, height: object.height };
 }
 
-export function objectVerb(archive: GameArchive, object: SceneObject | undefined, verb: number) {
+export function readObjectVerbs(archive: GameArchive, object: SceneObject | undefined) {
   if (!object?.code) return undefined;
   const disk = archive.disk;
   const table = disk.children(object.code).find(chunk => chunk.tag === 'VERB');
   if (!table) return undefined;
-  let fallback: number | undefined;
+  const offsets: Record<number, number> = {};
+  let first = table.end;
   for (let at = table.data; at + 2 < table.end && disk.u8(at); at += 3) {
     const id = disk.u8(at);
     const start = table.start + disk.u16(at + 1);
     if (start < table.data || start >= table.end) throw new Error(`Invalid object ${object.id} verb offset`);
-    if (id === verb) return disk.bytes.subarray(start, table.end);
-    if (id === 0xff) fallback = start;
+    offsets[id] ??= start;
+    first = Math.min(first, start);
   }
-  return fallback === undefined ? undefined : disk.bytes.subarray(fallback, table.end);
+  for (const id of Object.keys(offsets).map(Number)) offsets[id] -= first;
+  return first === table.end ? undefined : { code: disk.bytes.subarray(first, table.end), offsets };
+}
+
+export type Scene = ReturnType<typeof readScene>;
+export type ObjectImage = NonNullable<ReturnType<typeof readObjectImage>>;
+export type ObjectVerbs = NonNullable<ReturnType<typeof readObjectVerbs>>;
+
+export function getObjectVerb(verbs: ObjectVerbs | undefined, verb: number) {
+  if (!verbs) return undefined;
+  const offset = verbs.offsets[verb] ?? verbs.offsets[0xff];
+  return offset === undefined ? undefined : verbs.code.subarray(offset);
 }

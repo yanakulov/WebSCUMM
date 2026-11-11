@@ -1,8 +1,9 @@
-import type { GameArchive } from '../archive.ts';
-import { readCostume, type Costume, type Track } from '../costume.ts';
+import { GameArchive } from '../archive.ts';
+import type { Costume, Track } from '../costume.ts';
 import type { RGB } from '../palette.ts';
-import { readGameFont, measureText } from './font.ts';
-import { objectVerb, readObjectImage, readScene, type SceneObject } from './scene.ts';
+import { measureText, type GameFont } from './font.ts';
+import type { ObjectImage, Scene, SceneObject } from './scene.ts';
+import { archiveResources, MONKEY1_CD, type GameResources } from './resources.ts';
 import { ScummVM, VAR, type Script } from './vm.ts';
 import { locateBox, walkPath, type Point } from './walk.ts';
 
@@ -25,7 +26,6 @@ export interface Verb {
 
 export interface MessageStyle { x: number; y: number; color: number; right: number; center: boolean; overhead: boolean }
 export interface Message { pages: number[][]; style: MessageStyle; charset: number; actor: number; ticks: number; keep: boolean }
-type Scene = ReturnType<typeof readScene>;
 
 function createActor(id: number): Actor {
   return {
@@ -37,7 +37,7 @@ function createActor(id: number): Actor {
 }
 
 export class ScummGame {
-  readonly archive: GameArchive;
+  readonly resources: GameResources;
   readonly vm: ScummVM;
   readonly actors = new Map<number, Actor>();
   readonly verbs = new Map<number, Verb>();
@@ -51,8 +51,8 @@ export class ScummGame {
   readonly messageStyles = new Map<number, MessageStyle>();
   private readonly scenes = new Map<number, Scene>();
   private readonly costumes = new Map<number, Costume>();
-  private readonly fonts = new Map<number, ReturnType<typeof readGameFont>>();
-  private readonly objectImages = new Map<string, ReturnType<typeof readObjectImage>>();
+  private readonly fonts = new Map<number, GameFont>();
+  private readonly objectImages = new Map<string, ObjectImage | undefined>();
   private readonly cutscenes: { script: Script; argument: number; override?: number }[] = [];
   private readonly clicks: { x: number; y: number; button: number; verb?: number }[] = [];
   private readonly sentences: { args: number[]; frozen: number }[] = [];
@@ -82,10 +82,10 @@ export class ScummGame {
   error = '';
   stopped = false;
 
-  constructor(archive: GameArchive, random = Math.random) {
-    this.archive = archive;
+  constructor(source: GameArchive | GameResources, random = Math.random) {
+    this.resources = source instanceof GameArchive ? archiveResources(source) : source;
     this.random = random;
-    this.objects = archive.objects.map(object => ({ ...object }));
+    this.objects = this.resources.objects.map(object => ({ ...object }));
     this.vm = new ScummVM(this);
   }
 
@@ -98,8 +98,7 @@ export class ScummGame {
     variables[VAR.inputMode] = 3;
     variables[VAR.talkY] = -80;
     // The DOS CD interpreter supplies the track-B sector count to the boot script.
-    if (this.archive.rooms.some(room => room.id === 38 && room.name === 'lookout') &&
-      this.archive.rooms.some(room => room.id === 33 && room.name === 'dock')) variables[74] = 1225;
+    if (this.resources.edition === MONKEY1_CD) variables[74] = 1225;
     this.protect(() => this.vm.start(1, [0]));
   }
 
@@ -162,19 +161,19 @@ export class ScummGame {
 
   getScene(room: number) {
     let scene = this.scenes.get(room);
-    if (!scene) { scene = readScene(this.archive, room); this.scenes.set(room, scene); }
+    if (!scene) { scene = this.resources.scene(room); this.scenes.set(room, scene); }
     return scene;
   }
 
   getCostume(id: number) {
     let costume = this.costumes.get(id);
-    if (!costume) { costume = readCostume(this.archive, id); this.costumes.set(id, costume); }
+    if (!costume) { costume = this.resources.costume(id); this.costumes.set(id, costume); }
     return costume;
   }
 
   getFont(id: number) {
     let font = this.fonts.get(id);
-    if (!font) { font = readGameFont(this.archive, id); this.fonts.set(id, font); }
+    if (!font) { font = this.resources.font(id); this.fonts.set(id, font); }
     return font;
   }
 
@@ -192,7 +191,7 @@ export class ScummGame {
     if (!this.objectImages.has(key)) {
       const scene = this.getScene(room);
       const object = scene.objects.get(id);
-      this.objectImages.set(key, object && readObjectImage(this.archive, object, state, scene.transparent));
+      this.objectImages.set(key, object && this.resources.image(room, object, state, scene.transparent));
     }
     return this.objectImages.get(key);
   }
@@ -378,8 +377,13 @@ export class ScummGame {
   }
 
   runObject(id: number, verb: number, args: number[]) {
-    const script = objectVerb(this.archive, this.object(id), verb);
+    const script = this.objectVerb(id, verb);
     if (script) this.vm.runObject(id, script, this.physicalRoom, args);
+  }
+
+  objectVerb(id: number, verb: number) {
+    const object = this.object(id);
+    return object && this.resources.objectVerb(this.physicalRoom, object, verb);
   }
 
   findObject(x: number, y: number) {
@@ -443,14 +447,10 @@ export class ScummGame {
 
   startSound(id: number) {
     this.vm.variables[VAR.lastSound] = id;
-    const entry = this.archive.resources('DSOU').find(sound => sound.id === id);
-    if (!entry) return;
-    const { chunk } = this.archive.resource('DSOU', id);
-    const disk = this.archive.disk;
-    if (chunk.end - chunk.data === 24 && disk.u8(chunk.data + 7) === 2) {
-      const cdFrame = (at: number) => (disk.u8(at) * 60 + disk.u8(at + 1)) * 75 + disk.u8(at + 2);
-      const loops = disk.u8(chunk.data + 17);
-      const frames = cdFrame(chunk.data + 21) - cdFrame(chunk.data + 18);
+    const cue = this.resources.sound(id);
+    if (!cue) return;
+    if (cue.type === 'cd') {
+      const { loops, frames } = cue;
       // Without audio files, the actual duration of a whole-track one-shot is unavailable.
       const duration = loops === 255 ? Infinity : frames > 0 ? frames * Math.max(1, loops) * 60 / 75 : 180;
       this.music = { id, elapsed: 0, duration };

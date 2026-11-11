@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import PixelText from './byle/PixelText.vue';
-import type { GameArchive } from './engine/archive.ts';
 import { ScummGame } from './engine/game/game.ts';
 import { HEIGHT, WIDTH, hitVerb, renderGame } from './engine/game/render.ts';
+import type { GameResources } from './engine/game/resources.ts';
 import { paintIndexed } from './render.ts';
 
-const props = defineProps<{ archive?: GameArchive; paused: boolean; loading: boolean }>();
+const props = defineProps<{ source?: GameResources; paused: boolean; loading: boolean; loadError: string }>();
 const emit = defineEmits<{ open: [] }>();
 const canvas = ref<HTMLCanvasElement>();
 const error = ref('');
@@ -16,14 +16,14 @@ let game: ScummGame | undefined;
 let frame = 0;
 let last = 0;
 
-function start(archive = props.archive) {
+function start(source = props.source) {
   error.value = '';
   stopped.value = false;
-  game = archive ? new ScummGame(archive) : undefined;
+  game = source ? new ScummGame(source) : undefined;
   game?.boot();
   void nextTick(() => canvas.value?.focus());
 }
-watch(() => props.archive, archive => start(archive), { immediate: true });
+watch(() => props.source, source => start(source), { immediate: true });
 
 function loop(now: number) {
   const elapsed = last ? (now - last) / 1000 : 0;
@@ -76,7 +76,7 @@ function key(event: KeyboardEvent) {
 </script>
 
 <template>
-  <section v-if="archive" class="game-player" aria-label="SCUMM player">
+  <section v-if="source" class="game-player" aria-label="Monkey Island player">
     <canvas ref="canvas" :width="WIDTH" :height="HEIGHT" class="game-display" tabindex="0"
       aria-label="SCUMM game screen. Press Escape to skip a cutscene."
       @pointermove="point" @pointerdown="click" @pointerleave="leave" @keydown="key" @contextmenu.prevent />
@@ -89,10 +89,12 @@ function key(event: KeyboardEvent) {
     </div>
   </section>
   <section v-else class="game-start" aria-label="WebSCUMM">
-    <h1><PixelText text="WEBSCUMM" /></h1>
-    <button class="retro-action" type="button" :disabled="loading" @click="emit('open')">
-      <PixelText :text="loading ? 'READING ARCHIVE...' : 'OPEN SCUMM DATA'" />
-    </button>
+    <h1><PixelText text="THE SECRET OF MONKEY ISLAND" /></h1>
+    <PixelText v-if="loading" text="LOADING GAME DATA..." role="status" />
+    <template v-else>
+      <p v-if="loadError" class="pack-error" role="status">{{ loadError }}</p>
+      <button class="retro-action" type="button" @click="emit('open')"><PixelText text="OPEN LOCAL CD DATA" /></button>
+    </template>
   </section>
 </template>
 
@@ -102,6 +104,7 @@ function key(event: KeyboardEvent) {
 .game-display:focus { outline: none; }
 .game-start { display: grid; place-content: center; justify-items: center; gap: 8px; }
 .game-start h1 { margin: 0; color: #55ffff; line-height: 1; transform: scale(2); }
+.pack-error { margin: 0; color: #ff9a9a; font: 6px/1.4 monospace; }
 .game-status { position: absolute; inset: auto 6px 6px; padding: 4px; background: #000; color: #fff; border: 1px solid; }
 .game-status p { margin: 0; font: 6px/1.4 monospace; }
 </style>

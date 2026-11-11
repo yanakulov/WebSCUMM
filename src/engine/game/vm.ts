@@ -69,22 +69,22 @@ export class ScummVM {
 
   constructor(game: ScummGame) {
     this.game = game;
-    this.variables = new Int16Array(game.archive.variableCount);
-    this.bits = new Uint8Array(game.archive.bitVariableCount);
+    this.variables = new Int16Array(game.resources.variableCount);
+    this.bits = new Uint8Array(game.resources.bitVariableCount);
   }
 
   start(id: number, args: number[] = [], flags = 0) {
     if (!id) return;
     const room = id >= 200 ? this.game.physicalRoom : undefined;
     if (!(flags & 0x40)) this.stop(id, room);
-    const code = this.game.archive.script(id, room ?? 0);
+    const code = this.game.resources.script(id, room ?? 0);
     this.launch(new Script(id, code, room, room === undefined ? `SCRP ${id}` : `ROOM ${room} LSCR ${id}`, !!(flags & 0x20), args));
   }
 
   runRoomCode(tag: 'ENCD' | 'EXCD', room: number) {
     if (!room) return;
-    const code = this.game.archive.room(room).find(chunk => chunk.tag === tag);
-    if (code && code.data < code.end) this.launch(new Script(0, this.game.archive.disk.bytes.subarray(code.data, code.end), room, `ROOM ${room} ${tag}`, false, []));
+    const code = this.game.resources.roomCode(tag, room);
+    if (code?.length) this.launch(new Script(0, code, room, `ROOM ${room} ${tag}`, false, []));
   }
 
   runObject(id: number, code: Uint8Array, room: number, args: number[]) {

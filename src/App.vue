@@ -5,12 +5,17 @@ import PixelText from './byle/PixelText.vue';
 import RetroDialog from './byle/RetroDialog.vue';
 import RetroScreen from './byle/RetroScreen.vue';
 import { GameArchive } from './engine/archive.ts';
+import { loadMonkeyPack, MONKEY_PACK_PATH } from './engine/game/pack.ts';
+import { archiveResources, MONKEY1_CD, type GameResources } from './engine/game/resources.ts';
 import GamePlayer from './GamePlayer.vue';
 import RoomViewer from './RoomViewer.vue';
 
 const currentScreen = () => location.hash === '#rooms' ? 'rooms' : location.hash === '#byle' ? 'byle' : 'play';
 const screen = ref(currentScreen());
 const game = shallowRef<GameArchive>();
+const playSource = shallowRef<GameResources>();
+const packError = ref('');
+const packLoading = ref(false);
 const input = ref<HTMLInputElement>();
 const archiveOpen = ref(false);
 const archiveName = ref('');
@@ -18,15 +23,36 @@ const localName = ref('');
 const error = ref('');
 const loading = ref(false);
 
-function syncScreen() { screen.value = currentScreen(); }
+function syncScreen() {
+  screen.value = currentScreen();
+  if (screen.value === 'play') void loadPreparedGame();
+}
 function openArchive() { error.value = ''; archiveOpen.value = true; }
 
+async function loadPreparedGame() {
+  if (playSource.value || packLoading.value || packError.value) return;
+  packLoading.value = true;
+  try {
+    const prepared = await loadMonkeyPack(import.meta.env.BASE_URL + MONKEY_PACK_PATH);
+    playSource.value ??= prepared;
+  } catch (cause) {
+    packError.value = cause instanceof Error ? cause.message : String(cause);
+  } finally { packLoading.value = false; }
+}
+
 async function mountArchive(name: string, read: () => Promise<ArrayBuffer[]>) {
+  const forPlayer = screen.value === 'play';
   loading.value = true;
   error.value = '';
   try {
     const [index, disk] = await read();
-    game.value = new GameArchive(new Uint8Array(index), new Uint8Array(disk));
+    const archive = new GameArchive(new Uint8Array(index), new Uint8Array(disk));
+    if (forPlayer) {
+      const resources = archiveResources(archive);
+      if (resources.edition !== MONKEY1_CD) throw new Error('ONLY MONKEY ISLAND DOS CD (ENGLISH) CAN BE PLAYED.');
+      playSource.value = resources;
+    }
+    game.value = archive;
     archiveName.value = name;
     archiveOpen.value = false;
   } catch (cause) {
@@ -61,18 +87,13 @@ async function loadLocal() {
 
 onMounted(async () => {
   window.addEventListener('hashchange', syncScreen);
+  if (screen.value === 'play') void loadPreparedGame();
   if (!import.meta.env.DEV) return;
   try {
     const response = await fetch('./__game/manifest');
     if (response.ok && response.headers.get('Content-Type')?.includes('application/json')) {
       const manifest = await response.json();
-      if (typeof manifest.stem === 'string') {
-        localName.value = manifest.stem;
-        if (screen.value === 'play' && !game.value && !archiveOpen.value) {
-          await loadLocal();
-          if (error.value) archiveOpen.value = true;
-        }
-      }
+      if (typeof manifest.stem === 'string') localName.value = manifest.stem;
     }
   } catch { /* The local development archive is optional. */ }
 });
@@ -81,13 +102,14 @@ onUnmounted(() => window.removeEventListener('hashchange', syncScreen));
 
 <template>
   <RetroScreen>
-    <GamePlayer v-if="screen === 'play'" :archive="game" :paused="archiveOpen" :loading="loading" @open="openArchive" />
+    <GamePlayer v-if="screen === 'play'" :source="playSource" :paused="archiveOpen"
+      :loading="packLoading || loading" :load-error="packError" @open="openArchive" />
     <Byle v-show="screen === 'byle'" :game="game" :archive-name="archiveName" :active="screen === 'byle'"
       @import-game="openArchive" />
     <RoomViewer v-if="screen === 'rooms'" :game="game" @import-game="openArchive" />
     <RetroDialog v-if="archiveOpen" title="OPEN SCUMM DATA" @close="archiveOpen = false">
       <div class="retro-copy">
-        <PixelText text="SELECT .000 AND .001 FROM THE SAME SCUMM V5 GAME." />
+        <PixelText :text="screen === 'play' ? 'SELECT MONKEY ISLAND DOS CD .000 AND .001.' : 'SELECT .000 AND .001 FROM THE SAME SCUMM V5 GAME.'" />
         <PixelText v-if="archiveName" :text="`MOUNTED: ${archiveName.slice(0, 28)}`" />
         <p v-if="error" class="retro-error" role="alert"><PixelText :text="error.slice(0, 63)" /></p>
         <PixelText v-if="loading" text="READING ARCHIVE..." />
