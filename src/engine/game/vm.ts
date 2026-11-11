@@ -7,7 +7,7 @@ export const VAR = {
   virtualX: 20, virtualY: 21, roomResource: 22, lastSound: 23, cutsceneKey: 24, talkActor: 25,
   cameraFastX: 26, scroll: 27, entry: 28, entry2: 29, exit: 30, exit2: 31, input: 32, sentence: 33, cutsceneStart: 35,
   cutsceneEnd: 36, charIncrement: 37, debug: 39, mouseX: 44, mouseY: 45, timer: 46, total: 47,
-  soundCard: 48, videoMode: 49, cursor: 52, userInput: 53, talkY: 54, inputMode: 67,
+  soundCard: 48, videoMode: 49, cursor: 52, userInput: 53, talkY: 54, soundResult: 56, inputMode: 67,
 } as const;
 
 export class Script {

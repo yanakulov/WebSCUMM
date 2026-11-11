@@ -6,7 +6,9 @@ WebSCUMM is a browser-based TypeScript runtime and toolkit for PC SCUMM v5, buil
 
 ## Playing
 
-Open [the game](https://akulaflow.ru/webscummtest/). The intro starts once the browser loads the prepared resource pack. If the pack cannot be loaded, **OPEN LOCAL CD DATA** accepts the matching `.000` and `.001` files from the supported edition.
+Open [the game](https://akulaflow.ru/webscummtest/) and choose **PLAY**. The web pack, AdLib effects, and the DOS CD soundtrack are ready to play. Choose **OPEN LOCAL CD DATA** to use a matching `.000` and `.001` pair before starting. Use **MENU** or **F10** to return to setup.
+
+**LOAD CD TRACKS** accepts audio files named `track01.mp3` (also WAV, Ogg, Opus, FLAC, and M4A where supported) or the `.cue` and `.bin` files of a mixed-mode CD image. To play a replacement such as `track17.mid`, also choose a General MIDI `.sf2` with **LOAD SOUNDFONT**. The browser reads local files directly.
 
 | Action | Mouse and keyboard | Touchscreen |
 | --- | --- | --- |

@@ -1,3 +1,5 @@
+import type { GameAudio } from '../audio/cues.ts';
+import { imuseCommand, soundDuration, type PlayingSound } from '../audio/imuse.ts';
 import { GameArchive } from '../archive.ts';
 import type { Costume, Track } from '../costume.ts';
 import type { RGB } from '../palette.ts';
@@ -57,10 +59,12 @@ export class ScummGame {
   private readonly clicks: { x: number; y: number; button: number; verb?: number }[] = [];
   private readonly sentences: { args: number[]; frozen: number }[] = [];
   cutsceneStarting?: Script;
-  private music?: { id: number; elapsed: number; duration: number };
-  private readonly soundEffects = new Map<number, number>();
+  private music?: PlayingSound & { id: number };
+  private readonly soundCommands: number[][] = [];
+  private readonly soundEffects = new Map<number, PlayingSound>();
   private time = 0;
   private readonly random: () => number;
+  private readonly audio?: GameAudio;
   room = 0;
   physicalRoom = 0;
   scene?: Scene;
@@ -83,9 +87,10 @@ export class ScummGame {
   error = '';
   stopped = false;
 
-  constructor(source: GameArchive | GameResources, random = Math.random) {
+  constructor(source: GameArchive | GameResources, random = Math.random, audio?: GameAudio) {
     this.resources = source instanceof GameArchive ? archiveResources(source) : source;
     this.random = random;
+    this.audio = audio;
     this.objects = this.resources.objects.map(object => ({ ...object }));
     this.vm = new ScummVM(this);
   }
@@ -130,9 +135,9 @@ export class ScummGame {
       this.music.elapsed += delta;
       vars[VAR.music] = this.music.elapsed;
     }
-    for (const [id, ticks] of this.soundEffects) {
-      if (ticks <= delta) this.soundEffects.delete(id);
-      else this.soundEffects.set(id, ticks - delta);
+    for (const [id, sound] of this.soundEffects) {
+      sound.elapsed += delta;
+      if (sound.elapsed >= soundDuration(sound)) this.soundEffects.delete(id);
     }
     if (this.message) {
       this.message.ticks -= delta;
@@ -149,6 +154,7 @@ export class ScummGame {
       this.sentences.pop();
       this.vm.start(vars[VAR.sentence], sentence.args);
     }
+    this.processSoundCommands();
     if (!this.room) return;
     for (const actor of this.actors.values()) if (actor.room === this.room) this.stepActor(actor);
     this.moveCamera();
@@ -513,16 +519,18 @@ export class ScummGame {
     this.vm.variables[VAR.lastSound] = id;
     const cue = this.resources.sound(id);
     if (!cue) return;
+    const playback = this.audio?.start(id, cue);
     if (cue.type === 'cd') {
       const { loops, frames } = cue;
       // Without audio files, the actual duration of a whole-track one-shot is unavailable.
       const duration = loops === 255 ? Infinity : frames > 0 ? frames * Math.max(1, loops) * 60 / 75 : 180;
-      this.music = { id, elapsed: 0, duration };
+      this.music = { id, elapsed: 0, fallback: duration, playback };
       this.vm.variables[VAR.music] = 0;
-    } else this.soundEffects.set(id, 12);
+    } else this.soundEffects.set(id, { elapsed: 0, fallback: 12, playback });
   }
 
   stopSound(id: number) {
+    this.audio?.stop(id);
     if (!id || this.music?.id === id) {
       this.music = undefined;
       this.vm.variables[VAR.music] = 0;
@@ -532,7 +540,18 @@ export class ScummGame {
   }
 
   soundRunning(id: number) {
-    return (this.music?.id === id && this.music.elapsed < this.music.duration) || this.soundEffects.has(id);
+    return (this.music?.id === id && this.music.elapsed < soundDuration(this.music)) || this.soundEffects.has(id);
+  }
+
+  soundCommand(args: number[]) {
+    if (args[0] === -1) this.processSoundCommands();
+    else this.soundCommands.push(args);
+  }
+
+  private processSoundCommands() {
+    for (const args of this.soundCommands.splice(0)) {
+      this.vm.variables[VAR.soundResult] = imuseCommand(this, this.audio, args);
+    }
   }
 
   beginCutscene(script: Script, args: number[]) {
