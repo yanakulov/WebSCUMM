@@ -7,13 +7,13 @@ import { archiveResources, type GameResources } from './resources.ts';
 import { ScummVM, VAR, type Script } from './vm.ts';
 import { locateBox, walkPath, type Point } from './walk.ts';
 
-interface ActiveLimb { track: Track; tick: number; hidden: boolean }
+interface ActiveLimb { track?: Track; frame: number; chore: number; hidden: boolean }
 export interface Actor {
   id: number; room: number; x: number; y: number; direction: number; costume: number;
   speedX: number; speedY: number; scaleX: number; scaleY: number; elevation: number;
   walkChore: number; standChore: number; initChore: number; talkChore: number; quietChore: number;
   clip: number; ignoreBoxes: boolean; name: string; color: number; animationSpeed: number;
-  chore: number; limbs: (ActiveLimb | undefined)[]; palette: Map<number, number>; animationClock: number;
+  chore: number; limbs: (ActiveLimb | undefined)[]; palette: Map<number, number>; animationClock: number; animationCounter: number;
   width: number; sound: number; shadow: number;
   target?: Point; targetDirection?: number; path: Point[]; walkBox: number;
 }
@@ -31,7 +31,7 @@ function createActor(id: number): Actor {
   return {
     id, room: 0, x: 0, y: 0, direction: 2, costume: 0, speedX: 8, speedY: 2, scaleX: 255, scaleY: 255,
     elevation: 0, walkChore: 2, standChore: 3, initChore: 1, talkChore: 4, quietChore: 5, clip: 0,
-    ignoreBoxes: false, name: '', color: 15, animationSpeed: 1, chore: 3, animationClock: 0,
+    ignoreBoxes: false, name: '', color: 15, animationSpeed: 1, chore: 3, animationClock: 0, animationCounter: 0,
     limbs: Array(16).fill(undefined), palette: new Map(), width: 24, sound: 0, shadow: 0, path: [], walkBox: 0,
   };
 }
@@ -68,6 +68,7 @@ export class ScummGame {
   camera = 160;
   cameraTarget = 160;
   followedActor?: number;
+  private cameraCatchingUp = false;
   screenTop = 0;
   screenBottom = 200;
   charset = 1;
@@ -137,12 +138,6 @@ export class ScummGame {
       this.message.ticks -= delta;
       if (this.message.ticks <= 0) this.nextMessage();
     }
-    for (const actor of this.actors.values()) {
-      if (this.room && actor.room === this.room) this.stepActor(actor);
-    }
-    if (this.followedActor !== undefined) this.cameraTarget = this.clampCamera(this.actor(this.followedActor).x);
-    this.camera += Math.sign(this.cameraTarget - this.camera) * Math.min(8, Math.abs(this.cameraTarget - this.camera));
-    vars[VAR.cameraX] = Math.trunc(this.camera);
     vars[VAR.virtualX] = vars[VAR.mouseX] + this.viewX;
     this.vm.frame(delta);
     if (click && vars[VAR.userInput] > 0) {
@@ -154,6 +149,9 @@ export class ScummGame {
       this.sentences.pop();
       this.vm.start(vars[VAR.sentence], sentence.args);
     }
+    if (!this.room) return;
+    for (const actor of this.actors.values()) if (actor.room === this.room) this.stepActor(actor);
+    this.moveCamera();
   }
 
   get viewX() { return Math.max(0, Math.floor((this.camera - 160) / 8) * 8); }
@@ -229,14 +227,55 @@ export class ScummGame {
 
   setCamera(x: number) {
     this.followedActor = undefined;
+    this.cameraCatchingUp = false;
     this.camera = this.cameraTarget = this.vm.variables[VAR.cameraX] = this.clampCamera(x);
   }
 
-  followCamera(id: number) {
+  panCamera(x: number) {
+    this.followedActor = undefined;
+    this.cameraCatchingUp = false;
+    this.cameraTarget = this.clampCamera(x);
+  }
+
+  followCamera(id: number, center = false) {
     const actor = this.actor(id);
-    if (actor.room !== this.room) this.loadRoom(actor.room);
-    this.setCamera(actor.x);
+    if (actor.room !== this.room) {
+      this.loadRoom(actor.room);
+      center = true;
+    }
+    if (center) this.setCamera(actor.x);
+    else if (this.outsideFollowBand(actor.x)) {
+      this.cameraTarget = this.clampCamera(actor.x);
+      if (Math.abs(this.camera - this.cameraTarget) > 160) this.camera = this.cameraTarget;
+    }
     this.followedActor = actor.id;
+    this.cameraCatchingUp = false;
+  }
+
+  private outsideFollowBand(actorX: number) {
+    const strip = Math.floor((actorX - this.viewX) / 8);
+    return strip < 10 || strip > 30;
+  }
+
+  private moveCamera() {
+    const vars = this.vm.variables;
+    const previous = this.camera;
+    const aligned = (x: number) => Math.floor(x / 8) * 8;
+    this.camera = aligned(this.camera);
+    const actor = this.followedActor === undefined ? undefined : this.actor(this.followedActor);
+    const fast = !!vars[VAR.cameraFastX];
+    if (actor && this.outsideFollowBand(actor.x)) {
+      if (fast) {
+        const strip = Math.floor((actor.x - this.viewX) / 8);
+        if (strip < 5 || strip > 35) this.cameraTarget = actor.x + (strip < 5 ? -80 : 80);
+      } else this.cameraCatchingUp = true;
+    }
+    if (actor && this.cameraCatchingUp) this.cameraTarget = actor.x;
+    this.cameraTarget = aligned(this.clampCamera(this.cameraTarget));
+    this.camera = fast ? this.cameraTarget : this.camera + 8 * Math.sign(this.cameraTarget - this.camera);
+    if (this.camera === this.cameraTarget) this.cameraCatchingUp = false;
+    vars[VAR.cameraX] = this.camera;
+    if (vars[VAR.scroll] && this.camera !== previous) this.vm.start(vars[VAR.scroll]);
   }
 
   actor(id: number) {
@@ -280,24 +319,33 @@ export class ScummGame {
 
   setCostume(actor: Actor, id: number) {
     actor.costume = id;
-    actor.limbs.fill(undefined);
     this.chore(actor, actor.initChore);
   }
 
   chore(actor: Actor, id: number) {
+    if (id >= 0x38 && id <= 0x3c) id = [actor.initChore, actor.walkChore, actor.standChore, actor.talkChore, actor.quietChore][id - 0x38];
     actor.chore = id;
+    if (id === actor.initChore) actor.limbs.fill(undefined);
     if (!actor.costume) return;
+    actor.animationClock = actor.animationCounter = 0;
     const costume = this.getCostume(actor.costume);
     const animation = costume.chores[id * 4 + actor.direction];
     if (!animation) return;
     for (const [limb, track] of animation.tracks.entries()) {
-      if (!track) continue;
-      const existing = actor.limbs[limb];
-      if (track.disabled) actor.limbs[limb] = undefined;
-      else if (existing && track.cels[0] === -0x79) existing.hidden = true;
-      else if (existing && track.cels[0] === -0x7a) existing.hidden = false;
-      else actor.limbs[limb] = { track, tick: 0, hidden: false };
+      if (track) this.applyTrack(actor, limb, id, track);
     }
+  }
+
+  private applyTrack(actor: Actor, limb: number, chore: number, track: Track) {
+    const active = actor.limbs[limb] ?? { frame: 0, chore, hidden: false };
+    const command = track.cels[0];
+    if (command === -0x79 || command === -0x7a) active.hidden = command === -0x79;
+    else {
+      active.track = track.disabled ? undefined : track;
+      active.chore = chore;
+      active.frame = 0;
+    }
+    actor.limbs[limb] = active;
   }
 
   animate(actor: Actor, code: number) {
@@ -311,7 +359,13 @@ export class ScummGame {
   face(actor: Actor, direction: number) {
     if (actor.direction === direction) return;
     actor.direction = direction;
-    this.chore(actor, actor.chore);
+    if (!actor.costume) return;
+    const costume = this.getCostume(actor.costume);
+    for (const [limb, active] of actor.limbs.entries()) {
+      if (!active) continue;
+      const track = costume.chores[active.chore * 4 + direction]?.tracks[limb];
+      if (track) this.applyTrack(actor, limb, active.chore, track);
+    }
   }
 
   walk(actor: Actor, x: number, y: number, direction?: number) {
@@ -319,12 +373,12 @@ export class ScummGame {
     actor.path = walkPath(boxes, this.scene?.matrix, actor, { x, y });
     actor.targetDirection = direction;
     this.nextWalkPoint(actor);
-    if (actor.target) this.chore(actor, actor.walkChore);
+    if (actor.target && actor.chore !== actor.walkChore) this.chore(actor, actor.walkChore);
   }
 
   private nextWalkPoint(actor: Actor) {
     do { actor.target = actor.path.shift(); } while (actor.target && Math.abs(actor.target.x - actor.x) + Math.abs(actor.target.y - actor.y) < 1e-6);
-    if (actor.target) this.face(actor, directionTo(actor, actor.target));
+    if (actor.target) this.face(actor, directionTo(actor, actor.target, true));
     else {
       if (actor.targetDirection !== undefined) this.face(actor, actor.targetDirection);
       this.chore(actor, actor.standChore);
@@ -343,7 +397,18 @@ export class ScummGame {
     }
     if (++actor.animationClock >= actor.animationSpeed) {
       actor.animationClock = 0;
-      for (const limb of actor.limbs) if (limb) limb.tick++;
+      for (const limb of actor.limbs) if (limb?.track) this.advanceLimb(actor, limb, limb.track);
+    }
+  }
+
+  private advanceLimb(actor: Actor, limb: ActiveLimb, track: Track) {
+    const last = track.cels.length - 1;
+    for (let remaining = track.cels.length; remaining > 0; remaining--) {
+      limb.frame = limb.frame < last ? limb.frame + 1 : track.loop ? 0 : last;
+      const command = track.cels[limb.frame];
+      if (command === -0x7c) actor.animationCounter++;
+      if (command !== -0x78 && command !== -0x7c) break;
+      if (!track.loop && limb.frame === last) break;
     }
   }
 
@@ -583,8 +648,9 @@ export class ScummGame {
   }
 }
 
-export function directionTo(source: Point, target: Point) {
+export function directionTo(source: Point, target: Point, walking = false) {
   const dx = target.x - source.x;
   const dy = target.y - source.y;
-  return Math.abs(dx) > Math.abs(dy) * 2 ? (dx < 0 ? 0 : 1) : (dy < 0 ? 3 : 2);
+  const horizontal = walking ? Math.abs(dx) >= Math.abs(dy) * 3 : Math.abs(dx) > Math.abs(dy) * 2;
+  return horizontal && dx !== 0 ? (dx < 0 ? 0 : 1) : (dy < 0 ? 3 : 2);
 }

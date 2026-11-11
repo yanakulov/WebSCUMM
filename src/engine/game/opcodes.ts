@@ -55,7 +55,7 @@ export function executeOpcode(vm: ScummVM, s: Script, opcode: number, offset: nu
       switch (mode & 0x1f) {
         case 1: waiting = !!g.actor(vm.operand(s, mode)).target; break;
         case 2: waiting = !!g.message; break;
-        case 3: waiting = g.camera !== g.cameraTarget; break;
+        case 3: waiting = Math.floor(g.camera / 8) !== Math.floor(g.cameraTarget / 8); break;
         case 4: waiting = g.sentencePending; break;
         default: unsupported('wait operation', mode);
       }
@@ -126,7 +126,7 @@ export function executeOpcode(vm: ScummVM, s: Script, opcode: number, offset: nu
     case 0x0f: result(() => g.objects[w()]?.state ?? 0); return;
     case 0x10: result(() => g.objects[w()]?.owner ?? 0); return;
     case 0x11: case 0x51: g.animate(g.actor(b()), b(1)); return;
-    case 0x12: g.followedActor = undefined; g.cameraTarget = g.clampCamera(w()); return;
+    case 0x12: g.panCamera(w()); return;
     case 0x13: case 0x53: actorOps(vm, s, g.actor(b())); return;
     case 0x14: print(vm, s, b()); return;
     case 0x15: case 0x55: result(() => g.actorFromPoint(w(), w(1))); return;
@@ -142,7 +142,7 @@ export function executeOpcode(vm: ScummVM, s: Script, opcode: number, offset: nu
     case 0x1b: arithmetic((a, b) => a * b); return;
     case 0x1d: branch(g.hasClasses(w(), vm.arguments(s))); return;
     case 0x1e: case 0x3e: case 0x5e: case 0x7e: g.walk(g.actor(b()), w(1), w(2)); return;
-    case 0x22: result(() => g.actor(b()).animationClock); return;
+    case 0x22: result(() => g.actor(b()).animationCounter); return;
     case 0x23: result(() => Math.trunc(g.target(w())?.y ?? 0)); return;
     case 0x24: case 0x64: {
       const id = w(), room = b(1), x = s.signed(), y = s.signed();
@@ -155,7 +155,7 @@ export function executeOpcode(vm: ScummVM, s: Script, opcode: number, offset: nu
         g.face(actor, target.direction ^ 1);
       }
       g.loadRoom(room);
-      g.followCamera(actor.id);
+      g.followCamera(actor.id, true);
       if (x >= 0) g.walk(actor, x, y);
       return;
     }
