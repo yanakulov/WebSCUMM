@@ -1,5 +1,4 @@
 import { directionTo, type Actor } from './game.ts';
-import { objectVerb } from './scene.ts';
 import { type ScummVM, type Script, VAR } from './vm.ts';
 
 const unsupported = (type: string, code: number) => { throw new Error(`Unsupported ${type} $${code.toString(16)}`); };
@@ -112,7 +111,7 @@ export function executeOpcode(vm: ScummVM, s: Script, opcode: number, offset: nu
       return;
     }
     case 0x0a: case 0x2a: case 0x4a: case 0x6a: vm.start(b(), vm.arguments(s), opcode); return;
-    case 0x0b: case 0x4b: result(() => Number(!!objectVerb(g.archive, g.object(w()), w(1)))); return;
+    case 0x0b: case 0x4b: result(() => Number(!!g.objectVerb(w(), w(1)))); return;
     case 0x0c: resourceOps(vm, s); return;
     case 0x0d: case 0x4d: {
       const actor = g.actor(b()), target = g.actor(b(1)), distance = s.byte();

@@ -2,18 +2,25 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
+import { gunzipSync } from 'node:zlib';
 import { GameArchive } from '../src/engine/archive.ts';
 import { ScummGame } from '../src/engine/game/game.ts';
+import { MONKEY_PACK_PATH, parseMonkeyPack } from '../src/engine/game/pack.ts';
 import { HEIGHT, WIDTH, hitVerb, renderGame } from '../src/engine/game/render.ts';
 
 const directory = process.env.WEBSCUMM_GAME_DIR;
+const packed = parseMonkeyPack(gunzipSync(readFileSync(new URL(`../public/${MONKEY_PACK_PATH}`, import.meta.url))));
 
-function start(random = () => 0.5) {
+function loadOriginal() {
   const load = (ext: string) => {
     try { return readFileSync(join(directory!, `MONKEY1.${ext}`)); }
     catch { return readFileSync(join(directory!, `MONKEY.${ext}`)); }
   };
-  const game = new ScummGame(new GameArchive(load('000'), load('001')), random);
+  return new GameArchive(load('000'), load('001'));
+}
+
+function start(random = () => 0.5) {
+  const game = new ScummGame(packed, random);
   game.boot();
   return game;
 }
@@ -32,7 +39,7 @@ function advanceUntil(game: ScummGame, condition: () => boolean, timeout: number
   assert.fail(`Timed out in room ${game.room} after ${timeout}s`);
 }
 
-test('Monkey Island CD executes the original credits, lookout dialogue and part card', { skip: !directory }, () => {
+test('the web pack executes the original credits, lookout dialogue and part card', () => {
   const game = start();
   const title = advanceUntil(game, () => game.room === 10 && game.objects[109].state === 1, 25);
   assert.equal(game.camera, 160);
@@ -46,7 +53,7 @@ test('Monkey Island CD executes the original credits, lookout dialogue and part 
   assert.equal(game.followedActor, 1);
 });
 
-test('Monkey Island CD can skip cutscenes, read the dock poster and enter the SCUMM Bar', { skip: !directory }, () => {
+test('the web pack can skip cutscenes, read the dock poster and enter the SCUMM Bar', () => {
   const game = start();
   advanceUntil(game, () => game.room === 10 && game.vm.variables[14] >= 1260, 25);
   game.key(27);
@@ -75,7 +82,7 @@ test('Monkey Island CD can skip cutscenes, read the dock poster and enter the SC
   assert.ok(new Set(bar).size > 40);
 });
 
-test('Monkey Island CD cycles all three jail torches and allows talking to the prisoner', { skip: !directory }, () => {
+test('the web pack cycles all three jail torches and allows talking to the prisoner', () => {
   let seed = 42;
   const game = start(() => {
     seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
@@ -122,4 +129,11 @@ test('Monkey Island CD cycles all three jail torches and allows talking to the p
   game.click(46, 90, 1);
   advanceUntil(game, () => !!game.message, 10);
   assert.equal(String.fromCharCode(...game.message!.pages[0]), 'You gotta get me out of here!');
+});
+
+test('the original CD and the web pack draw the same title frame', { skip: !directory }, () => {
+  const local = new ScummGame(loadOriginal(), () => 0.5);
+  local.boot();
+  const title = (game: ScummGame) => advanceUntil(game, () => game.room === 10 && game.objects[109].state === 1, 25);
+  assert.deepEqual(title(start()), title(local));
 });
