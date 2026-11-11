@@ -2,6 +2,7 @@ import type { GameArchive } from '../src/engine/archive.ts';
 import { archiveResources } from '../src/engine/game/resources.ts';
 
 export const MONKEY1_CD = 'monkey1-dos-cd-en';
+export const MONKEY1_INTRO_TRACK = 17;
 export const MONKEY1_TITLE = 'THE SECRET OF MONKEY ISLAND';
 export const MONKEY1_CD_PICKER = 'SELECT MONKEY ISLAND DOS CD .000 AND .001.';
 export const MONKEY1_CD_ERROR = 'ONLY MONKEY ISLAND DOS CD (ENGLISH) CAN BE PLAYED.';

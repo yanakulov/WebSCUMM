@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import PixelText from './byle/PixelText.vue';
+import type { BrowserAudio } from './engine/audio/browser-audio.ts';
 import { ScummGame } from './engine/game/game.ts';
 import { HEIGHT, WIDTH, hitVerb, renderGame } from './engine/game/render.ts';
 import type { GameResources } from './engine/game/resources.ts';
 import { paintIndexed } from './render.ts';
 
-const props = defineProps<{ title: string; source?: GameResources; paused: boolean; loading: boolean; loadError: string }>();
-const emit = defineEmits<{ open: [] }>();
+const props = defineProps<{ title: string; source: GameResources; audio?: BrowserAudio }>();
+const emit = defineEmits<{ menu: [] }>();
 const canvas = ref<HTMLCanvasElement>();
 const error = ref('');
 const stopped = ref(false);
@@ -24,25 +25,28 @@ function start(source = props.source) {
   stopped.value = false;
   touch = undefined;
   cursor = { x: WIDTH / 2, y: HEIGHT / 2 };
-  game = source ? new ScummGame(source) : undefined;
-  game?.boot();
+  props.audio?.stop(0);
+  props.audio?.unlock();
+  game = new ScummGame(source, Math.random, props.audio);
+  game.boot();
   void nextTick(() => canvas.value?.focus());
 }
 watch(() => props.source, source => start(source), { immediate: true });
-watch(() => props.paused, paused => { if (paused) touch = undefined; });
 
 function loop(now: number) {
   const elapsed = last ? (now - last) / 1000 : 0;
   last = now;
-  if (game && canvas.value && !props.paused && !error.value && !stopped.value) {
+  if (game && canvas.value && !error.value && !stopped.value) {
     try {
       game.advance(elapsed);
       renderGame(game, pixels);
       paintIndexed(canvas.value, pixels, game.palette, WIDTH, HEIGHT);
       error.value = game.error;
       stopped.value = game.stopped;
+      if (error.value || stopped.value) props.audio?.stop(0);
     } catch (cause) {
       error.value = cause instanceof Error ? cause.message : String(cause);
+      props.audio?.stop(0);
     }
   }
   frame = requestAnimationFrame(loop);
@@ -51,7 +55,7 @@ onMounted(() => { frame = requestAnimationFrame(loop); });
 onUnmounted(() => cancelAnimationFrame(frame));
 
 function acceptsInput() {
-  return game && canvas.value && !props.paused && !error.value && !stopped.value;
+  return game && canvas.value && !error.value && !stopped.value;
 }
 
 function setCursor(x: number, y: number) {
@@ -82,6 +86,7 @@ function move(event: PointerEvent) {
 
 function down(event: PointerEvent) {
   if (!acceptsInput()) return;
+  props.audio?.unlock();
   if (event.pointerType === 'touch') {
     if (touch) { touch.cancelled = true; return; }
     if (!event.isPrimary) return;
@@ -114,7 +119,9 @@ function leave(event: PointerEvent) {
 const specialKeys: Record<string, number> = { Escape: 27, Enter: 13, Backspace: 8 };
 
 function key(event: KeyboardEvent) {
-  if (!game || props.paused || error.value || event.ctrlKey || event.altKey || event.metaKey) return;
+  if (!game || error.value || event.ctrlKey || event.altKey || event.metaKey) return;
+  if (event.key === 'F10') { event.preventDefault(); emit('menu'); return; }
+  props.audio?.unlock();
   const code = specialKeys[event.key] ?? (event.key.length === 1 ? event.key.charCodeAt(0) : 0);
   if (!code) return;
   event.preventDefault();
@@ -123,36 +130,31 @@ function key(event: KeyboardEvent) {
 </script>
 
 <template>
-  <section v-if="source" class="game-player" :aria-label="title">
+  <section class="game-player" :aria-label="title">
     <canvas ref="canvas" :width="WIDTH" :height="HEIGHT" class="game-display" tabindex="0"
       aria-label="SCUMM game screen. Press Escape or tap to skip a cutscene. Swipe to move the cursor."
       @pointermove="move" @pointerdown="down" @pointerup="up" @pointercancel="cancel" @lostpointercapture="cancel"
       @pointerleave="leave" @keydown="key" @contextmenu.prevent />
+    <button v-if="!error && !stopped" type="button" class="retro-action game-menu" @click="emit('menu')">
+      <PixelText text="MENU" />
+    </button>
     <div v-if="error || stopped" class="game-status" role="status">
       <p>{{ error || 'The game has ended.' }}</p>
       <div class="retro-actions">
         <button type="button" class="retro-action" @click="start()"><PixelText text="RESTART" /></button>
-        <button type="button" class="retro-action" @click="emit('open')"><PixelText text="OPEN SCUMM DATA" /></button>
+        <button type="button" class="retro-action" @click="emit('menu')"><PixelText text="MENU" /></button>
       </div>
     </div>
-  </section>
-  <section v-else class="game-start" aria-label="WebSCUMM">
-    <h1><PixelText :text="title" /></h1>
-    <PixelText v-if="loading" text="LOADING GAME DATA..." role="status" />
-    <template v-else>
-      <p v-if="loadError" class="pack-error" role="status">{{ loadError }}</p>
-      <button class="retro-action" type="button" @click="emit('open')"><PixelText text="OPEN LOCAL CD DATA" /></button>
-    </template>
   </section>
 </template>
 
 <style scoped>
-.game-player, .game-start { position: absolute; inset: 0; }
+.game-player { position: absolute; inset: 0; }
 .game-display { width: 100%; height: 100%; display: block; image-rendering: pixelated; cursor: none; touch-action: none; }
 .game-display:focus { outline: none; }
-.game-start { display: grid; place-content: center; justify-items: center; gap: 8px; }
-.game-start h1 { margin: 0; color: #55ffff; line-height: 1; transform: scale(2); }
-.pack-error { margin: 0; color: #ff9a9a; font: 6px/1.4 monospace; }
+.byle-screen .game-menu { position: absolute; top: 3px; right: 3px; opacity: 0.55; }
+.game-menu:focus-visible, .game-menu:hover { opacity: 1; }
+@media (pointer: coarse) { .byle-screen .game-menu { opacity: 0.8; } }
 .game-status { position: absolute; inset: auto 6px 6px; padding: 4px; background: #000; color: #fff; border: 1px solid; }
 .game-status p { margin: 0; font: 6px/1.4 monospace; }
 </style>

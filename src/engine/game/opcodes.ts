@@ -32,7 +32,7 @@ export function executeOpcode(vm: ScummVM, s: Script, opcode: number, offset: nu
       vm.set(s, addr, vm.get(s, addr) + (opcode === 0x46 ? 1 : -1));
       return;
     }
-    case 0x4c: vm.arguments(s); return; // Audio driver commands have no output until an audio backend is attached.
+    case 0x4c: g.soundCommand(vm.arguments(s)); return;
     case 0x58: {
       if (!s.byte()) { g.setOverride(s, undefined); return; }
       if (s.byte() !== 0x18) throw new Error('Expected jump at cutscene override');

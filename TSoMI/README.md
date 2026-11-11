@@ -6,9 +6,15 @@ This directory holds the English DOS CD profile, its prepared web assets, export
 
 ## Web resource pack
 
-The published `assets/monkey1.wsc.gz` pack contains decoded indexed graphics, palettes, depth masks, costume frames, bitmap fonts, and the game’s scripts. The `WSC1` format uses a JSON directory to index the binary payload. The original `.000` and `.001` archives, DOS executable, drivers, and audio tracks stay local.
+The published `assets/monkey1.wsc.gz` pack contains decoded indexed graphics, palettes, depth masks, costume frames, bitmap fonts, the game’s scripts, AdLib sequences, and decoded sound effects. The `WSC1` format uses a JSON directory to index the binary payload. The original `.000` and `.001` archives, DOS executable, drivers, and original disc image stay local.
 
 Run `npm run assets:monkey -- <game-directory>` from the repository root to rebuild the pack from an English DOS CD installation.
+
+## CD soundtrack
+
+The web build includes all 24 audio tracks converted from the matching `MNKY_TWN` mixed-mode CD. It downloads each compressed track as needed. The game numbers audio tracks from 1, starting at physical track 2. The title and lookout share track 17 with different start offsets. The sound driver uses the CD cue's frame offset and repeat count.
+
+To regenerate the web audio with FFmpeg, run `node TSoMI/tools/export-cd-audio.ts path/to/MNKY_TWN.cue`. The output is stereo MP3 in `TSoMI/assets/cd/`.
 
 ## CHAR 1
 
@@ -16,4 +22,4 @@ Run `npm run font:char1 -- <game-directory>` to add all 66 Russian letters to th
 
 ## Compatibility
 
-The opening, the dock, the entrance to the SCUMM Bar, and the start of the jail conversation have been tested. The runtime still has incomplete opcode coverage. Audio playback and saved games are pending.
+The opening, the dock, the entrance to the SCUMM Bar, and the start of the jail conversation have been tested. The runtime still has incomplete opcode coverage. The audio backend supports the SCUMM v5 iMUSE command queue, playback status, volume, and fades. iMUSE hooks and adaptive transitions remain to be implemented, along with saved games.

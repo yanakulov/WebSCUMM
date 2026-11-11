@@ -11,7 +11,10 @@
     "font:char1": "node TSoMI/tools/export-char1.ts",
     "test": "node --test tests/*.test.ts TSoMI/tests/*.test.ts"
   },
-  "dependencies": { "vue": "^3.5.0" },
+  "dependencies": {
+    "midi-file": "1.2.4",
+    "vue": "^3.5.0"
+  },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@vitejs/plugin-vue": "^6.0.0",

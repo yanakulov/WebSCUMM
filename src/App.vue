@@ -4,9 +4,14 @@ import Byle from './byle/Byle.vue';
 import PixelText from './byle/PixelText.vue';
 import RetroDialog from './byle/RetroDialog.vue';
 import RetroScreen from './byle/RetroScreen.vue';
+import { BrowserAudio, type MusicLibrary } from './engine/audio/browser-audio.ts';
+import { loadTrackFiles } from './engine/audio/cd.ts';
+import oplSource from './engine/audio/vendor/opl-source.tar.gz?url';
+import soundFontSource from './engine/audio/vendor/mt32-source.tar.gz?url';
+import { monkeyCdTracks } from '../TSoMI/music.ts';
 import { GameArchive } from './engine/archive.ts';
 import monkeyPackUrl from '../TSoMI/assets/monkey1.wsc.gz?url';
-import { monkeyCdResources, MONKEY1_TITLE, MONKEY1_CD_PICKER, MONKEY1_CD_ERROR } from '../TSoMI/game.ts';
+import { monkeyCdResources, MONKEY1_INTRO_TRACK, MONKEY1_TITLE, MONKEY1_CD_PICKER, MONKEY1_CD_ERROR } from '../TSoMI/game.ts';
 import { loadMonkeyPack } from '../TSoMI/pack.ts';
 import type { GameResources } from './engine/game/resources.ts';
 import GamePlayer from './GamePlayer.vue';
@@ -16,8 +21,19 @@ const currentScreen = () => location.hash === '#rooms' ? 'rooms' : location.hash
 const screen = ref(currentScreen());
 const game = shallowRef<GameArchive>();
 const playSource = shallowRef<GameResources>();
-const packError = ref('');
-const packLoading = ref(false);
+const localSource = shallowRef<GameResources>();
+const localArchiveName = ref('');
+const audio = shallowRef<BrowserAudio>();
+const selected = ref<'prepared' | 'local'>('prepared');
+const launching = ref(false);
+const soundLoading = ref(false);
+const launchError = ref('');
+const tracks = shallowRef<MusicLibrary>(new Map());
+const bank = shallowRef<Awaited<ReturnType<typeof import('./engine/audio/soundfont.ts').loadSoundFont>>>();
+const bankName = ref('');
+const trackInput = ref<HTMLInputElement>();
+const bankInput = ref<HTMLInputElement>();
+let prepared: GameResources | undefined;
 const input = ref<HTMLInputElement>();
 const archiveOpen = ref(false);
 const archiveName = ref('');
@@ -27,19 +43,56 @@ const loading = ref(false);
 
 function syncScreen() {
   screen.value = currentScreen();
-  if (screen.value === 'play') void loadPreparedGame();
+  if (screen.value !== 'play') showLauncher();
 }
 function openArchive() { error.value = ''; archiveOpen.value = true; }
 
-async function loadPreparedGame() {
-  if (playSource.value || packLoading.value || packError.value) return;
-  packLoading.value = true;
+async function launch() {
+  launching.value = true;
+  launchError.value = '';
+  let device: BrowserAudio | undefined;
   try {
-    const prepared = await loadMonkeyPack(monkeyPackUrl);
-    playSource.value ??= prepared;
+    device = new BrowserAudio(new AudioContext(), tracks.value, monkeyCdTracks, bank.value);
+    audio.value = device;
+    device.unlock();
+    const [resources] = await Promise.all([
+      selected.value === 'local' ? localSource.value : prepared ?? loadMonkeyPack(monkeyPackUrl),
+      device.prepare(MONKEY1_INTRO_TRACK),
+    ]);
+    if (!resources) throw new Error('SELECT A GAME ARCHIVE FIRST.');
+    if (selected.value === 'prepared') prepared = resources;
+    if (audio.value === device) playSource.value = resources;
   } catch (cause) {
-    packError.value = cause instanceof Error ? cause.message : String(cause);
-  } finally { packLoading.value = false; }
+    if (audio.value === device) {
+      showLauncher();
+      launchError.value = cause instanceof Error ? cause.message : String(cause);
+    }
+  } finally { launching.value = false; }
+}
+
+function showLauncher() {
+  playSource.value = undefined;
+  audio.value?.dispose();
+  audio.value = undefined;
+}
+
+async function openSoundFiles(event: Event, kind: 'tracks' | 'bank') {
+  const picker = event.target as HTMLInputElement;
+  const files = [...(picker.files ?? [])];
+  picker.value = '';
+  if (!files.length) return;
+  launchError.value = '';
+  soundLoading.value = true;
+  try {
+    if (kind === 'tracks') tracks.value = await loadTrackFiles(files);
+    else {
+      const { loadSoundFont } = await import('./engine/audio/soundfont.ts');
+      bank.value = await loadSoundFont(files[0]);
+      bankName.value = files[0].name;
+    }
+  } catch (cause) {
+    launchError.value = cause instanceof Error ? cause.message : String(cause);
+  } finally { soundLoading.value = false; }
 }
 
 async function mountArchive(name: string, read: () => Promise<ArrayBuffer[]>) {
@@ -52,7 +105,10 @@ async function mountArchive(name: string, read: () => Promise<ArrayBuffer[]>) {
     if (forPlayer) {
       const resources = monkeyCdResources(archive);
       if (!resources) throw new Error(MONKEY1_CD_ERROR);
-      playSource.value = resources;
+      localSource.value = resources;
+      localArchiveName.value = name;
+      selected.value = 'local';
+      launchError.value = '';
     }
     game.value = archive;
     archiveName.value = name;
@@ -89,7 +145,6 @@ async function loadLocal() {
 
 onMounted(async () => {
   window.addEventListener('hashchange', syncScreen);
-  if (screen.value === 'play') void loadPreparedGame();
   if (!import.meta.env.DEV) return;
   try {
     const response = await fetch('./__game/manifest');
@@ -99,13 +154,62 @@ onMounted(async () => {
     }
   } catch { /* The local development archive is optional. */ }
 });
-onUnmounted(() => window.removeEventListener('hashchange', syncScreen));
+onUnmounted(() => {
+  window.removeEventListener('hashchange', syncScreen);
+  showLauncher();
+});
 </script>
 
 <template>
   <RetroScreen>
-    <GamePlayer v-if="screen === 'play'" :title="MONKEY1_TITLE" :source="playSource" :paused="archiveOpen"
-      :loading="packLoading || loading" :load-error="packError" @open="openArchive" />
+    <GamePlayer v-if="screen === 'play' && playSource" :title="MONKEY1_TITLE" :source="playSource" :audio="audio" @menu="showLauncher" />
+    <section v-else-if="screen === 'play'" class="game-start" aria-label="WebSCUMM start menu" :inert="archiveOpen">
+      <h1><PixelText :text="MONKEY1_TITLE" /></h1>
+      <div class="game-setup">
+        <div class="setup-line">
+          <PixelText text="GAME DATA" />
+          <div class="setup-options">
+            <button class="retro-action" type="button" :disabled="launching" :aria-pressed="selected === 'prepared'"
+              @click="selected = 'prepared'; launchError = ''"><PixelText text="WEB PACK" /></button>
+            <button v-if="localSource" class="retro-action" type="button" :disabled="launching" :aria-pressed="selected === 'local'"
+              @click="selected = 'local'; launchError = ''"><PixelText :text="localArchiveName.toUpperCase().slice(0, 16)" /></button>
+            <button class="retro-action" type="button" :disabled="launching" @click="openArchive"><PixelText text="OPEN LOCAL CD DATA" /></button>
+          </div>
+        </div>
+        <div class="setup-line">
+          <PixelText text="AUDIO" />
+          <div class="setup-options">
+            <PixelText text="ADLIB + CD MUSIC" />
+            <button class="retro-action" type="button" :disabled="launching || soundLoading" @click="trackInput?.click()">
+              <PixelText :text="tracks.size ? `CD TRACKS: ${tracks.size}` : 'LOAD CD TRACKS'" />
+            </button>
+            <button v-if="tracks.size" class="retro-action" type="button" :disabled="launching || soundLoading"
+              @click="tracks = new Map()"><PixelText text="RESET TRACKS" /></button>
+          </div>
+        </div>
+        <div class="setup-line">
+          <PixelText text="MIDI" />
+          <div class="setup-options">
+            <button class="retro-action" type="button" :disabled="launching || soundLoading" @click="bankInput?.click()">
+              <PixelText text="LOAD SOUNDFONT" />
+            </button>
+            <PixelText v-if="bankName" :text="bankName.toUpperCase().slice(0, 24)" role="status" />
+            <PixelText v-else text="FOR MIDI TRACKS (.SF2)" />
+          </div>
+        </div>
+      </div>
+      <p v-if="launchError" class="launch-error" role="alert">{{ launchError }}</p>
+      <button class="retro-action play-action" type="button" :disabled="launching || soundLoading" @click="launch">
+        <PixelText :text="launching ? 'LOADING GAME...' : soundLoading ? 'READING AUDIO...' : 'PLAY'" />
+      </button>
+      <div class="audio-sources">
+        <a :href="oplSource" download><PixelText text="OPL SOURCE" /></a>
+        <a :href="soundFontSource" download><PixelText text="SOUNDFONT SOURCE" /></a>
+      </div>
+      <input ref="trackInput" aria-label="CD audio files" type="file" accept=".mp3,.ogg,.opus,.flac,.wav,.m4a,.mid,.midi,.cue,.bin" multiple hidden
+        @change="openSoundFiles($event, 'tracks')">
+      <input ref="bankInput" aria-label="SoundFont file" type="file" accept=".sf2" hidden @change="openSoundFiles($event, 'bank')">
+    </section>
     <Byle v-show="screen === 'byle'" :game="game" :archive-name="archiveName" :active="screen === 'byle'"
       @import-game="openArchive" />
     <RoomViewer v-if="screen === 'rooms'" :game="game" @import-game="openArchive" />
@@ -124,6 +228,20 @@ onUnmounted(() => window.removeEventListener('hashchange', syncScreen));
         <button type="button" class="retro-action" :disabled="loading" @click="archiveOpen = false"><PixelText text="CANCEL" /></button>
       </div>
     </RetroDialog>
-    <input ref="input" type="file" accept=".000,.001" multiple hidden @change="openGame">
+    <input ref="input" aria-label="SCUMM archive files" type="file" accept=".000,.001" multiple hidden @change="openGame">
   </RetroScreen>
 </template>
+
+<style scoped>
+.game-start { position: absolute; inset: 0; display: grid; align-content: center; justify-items: center; gap: 10px; }
+.game-start h1 { margin: 0 0 5px; color: #55ffff; line-height: 1; transform: scale(2); }
+.game-setup { display: grid; gap: 5px; width: 260px; padding: 7px; border: 1px solid #aaa; }
+.setup-line { display: grid; grid-template-columns: 43px 1fr; align-items: center; gap: 2px; }
+.setup-options { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.setup-options .retro-action { min-height: 13px; }
+.play-action { min-height: 16px; min-width: 54px; }
+.launch-error { margin: 0; max-width: 258px; color: #ff9a9a; font: 6px/1.4 monospace; }
+.audio-sources { position: absolute; inset: auto 8px 7px; display: flex; gap: 8px; }
+.audio-sources a { color: #aaa; display: flex; }
+.audio-sources a:hover { color: white; }
+</style>
