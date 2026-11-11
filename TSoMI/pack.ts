@@ -1,9 +1,9 @@
-import type { Cel, Costume } from '../costume.ts';
-import type { GameFont } from './font.ts';
-import { MONKEY1_CD, type GameResources, type RoomCode, type SoundCue } from './resources.ts';
-import { getObjectVerb, type ObjectImage, type ObjectVerbs, type Scene, type SceneObject } from './scene.ts';
+import type { Cel, Costume } from '../src/engine/costume.ts';
+import type { GameFont } from '../src/engine/game/font.ts';
+import type { GameResources, RoomCode, SoundCue } from '../src/engine/game/resources.ts';
+import { getObjectVerb, type ObjectImage, type ObjectVerbs, type Scene, type SceneObject } from '../src/engine/game/scene.ts';
+import { MONKEY1_CD, monkeyBootVariables } from './game.ts';
 
-export const MONKEY_PACK_PATH = 'assets/monkey1.wsc.gz';
 const magic = [0x57, 0x53, 0x43, 0x31]; // WSC1
 const headerSize = 8;
 
@@ -88,7 +88,7 @@ export function parseMonkeyPack(bytes: Uint8Array): GameResources {
 
   const room = (id: number) => required(pack.rooms[id], `room ${id}`);
   return {
-    edition: pack.edition,
+    bootVariables: monkeyBootVariables,
     variableCount: pack.variableCount,
     bitVariableCount: pack.bitVariableCount,
     objects: pack.objects,

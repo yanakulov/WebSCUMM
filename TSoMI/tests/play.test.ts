@@ -1,23 +1,15 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import test from 'node:test';
 import { gunzipSync } from 'node:zlib';
-import { GameArchive } from '../src/engine/archive.ts';
-import { ScummGame } from '../src/engine/game/game.ts';
-import { MONKEY_PACK_PATH, parseMonkeyPack } from '../src/engine/game/pack.ts';
-import { HEIGHT, WIDTH, hitVerb, renderGame } from '../src/engine/game/render.ts';
+import { ScummGame } from '../../src/engine/game/game.ts';
+import { HEIGHT, WIDTH, hitVerb, renderGame } from '../../src/engine/game/render.ts';
+import { monkeyCdResources } from '../game.ts';
+import { parseMonkeyPack } from '../pack.ts';
+import { loadOriginal } from './fixtures.ts';
 
 const directory = process.env.WEBSCUMM_GAME_DIR;
-const packed = parseMonkeyPack(gunzipSync(readFileSync(new URL(`../public/${MONKEY_PACK_PATH}`, import.meta.url))));
-
-function loadOriginal() {
-  const load = (ext: string) => {
-    try { return readFileSync(join(directory!, `MONKEY1.${ext}`)); }
-    catch { return readFileSync(join(directory!, `MONKEY.${ext}`)); }
-  };
-  return new GameArchive(load('000'), load('001'));
-}
+const packed = parseMonkeyPack(gunzipSync(readFileSync(new URL('../assets/monkey1.wsc.gz', import.meta.url))));
 
 function start(random = () => 0.5) {
   const game = new ScummGame(packed, random);
@@ -132,8 +124,26 @@ test('the web pack cycles all three jail torches and allows talking to the priso
 });
 
 test('the original CD and the web pack draw the same title frame', { skip: !directory }, () => {
-  const local = new ScummGame(loadOriginal(), () => 0.5);
+  const resources = monkeyCdResources(loadOriginal(directory!));
+  assert.ok(resources);
+  const local = new ScummGame(resources, () => 0.5);
   local.boot();
   const title = (game: ScummGame) => advanceUntil(game, () => game.room === 10 && game.objects[109].state === 1, 25);
   assert.deepEqual(title(start()), title(local));
+});
+
+test('a tap skips the title before its override is armed and advances in-game dialogue', () => {
+  const game = start();
+  advanceUntil(game, () => game.room === 10, 2);
+  game.tap(160, 100);
+  advanceUntil(game, () => game.room === 38, 5);
+  game.tap(160, 100);
+  advanceUntil(game, () => game.room === 33 && !game.actor(1).target, 35);
+
+  game.tap(72, 173, hitVerb(game, 72, 173)?.id);
+  game.tap(264 - game.viewX, 103);
+  advanceUntil(game, () => !!game.message, 8);
+  assert.equal(String.fromCharCode(...game.message!.pages[0]), 'Re-elect Governor Marley.');
+  game.tap(160, 100);
+  assert.equal(String.fromCharCode(...game.message!.pages[0]), "`When there's only one candidate, there's only one choice.`");
 });

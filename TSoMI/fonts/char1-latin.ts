@@ -1,4 +1,4 @@
-import type { CharsetGlyph } from '../engine/charset.ts';
+import type { CharsetGlyph } from '../../src/engine/charset.ts';
 
 // Printable ASCII bitmap rows and metrics from Monkey Island DOS CD, CHAR 1.
 // https://github.com/dbonates/MI-CHARfontEditor/blob/cdbee321f330c7fe36615945477ffa3a43bc40f4/char0001.bmp

@@ -3,12 +3,11 @@ import { readCostume, type Costume } from '../costume.ts';
 import { readGameFont, type GameFont } from './font.ts';
 import { getObjectVerb, readObjectImage, readObjectVerbs, readScene, type ObjectImage, type Scene, type SceneObject } from './scene.ts';
 
-export const MONKEY1_CD = 'monkey1-dos-cd-en';
 export type RoomCode = 'ENCD' | 'EXCD';
 export type SoundCue = { type: 'cd'; loops: number; frames: number } | { type: 'effect' };
 
 export interface GameResources {
-  edition?: typeof MONKEY1_CD;
+  bootVariables?: Readonly<Record<number, number>>;
   variableCount: number;
   bitVariableCount: number;
   objects: GameArchive['objects'];
@@ -22,17 +21,8 @@ export interface GameResources {
   sound(id: number): SoundCue | undefined;
 }
 
-export function isMonkeyIslandCd(archive: GameArchive) {
-  if (![[10, 'logo'], [33, 'dock'], [38, 'lookout']].every(([id, name]) =>
-    archive.rooms.some(room => room.id === id && room.name === name))) return false;
-  if (!archive.resources('DSCR').some(entry => entry.id === 176)) return false;
-  const cdCheck = new TextDecoder().decode(archive.script(176, 0));
-  return cdCheck.includes('Game Requires Monkey Island CD in Drive!');
-}
-
 export function archiveResources(archive: GameArchive): GameResources {
   return {
-    edition: isMonkeyIslandCd(archive) ? MONKEY1_CD : undefined,
     variableCount: archive.variableCount,
     bitVariableCount: archive.bitVariableCount,
     objects: archive.objects,
