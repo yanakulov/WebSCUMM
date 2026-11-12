@@ -13,6 +13,7 @@ import { GameArchive } from './engine/archive.ts';
 import monkeyPackUrl from '../TSoMI/assets/monkey1.wsc.gz?url';
 import { monkeyCdResources, MONKEY1_INTRO_TRACK, MONKEY1_TITLE, MONKEY1_CD_PICKER, MONKEY1_CD_ERROR } from '../TSoMI/game.ts';
 import { loadMonkeyPack } from '../TSoMI/pack.ts';
+import { FERRY_TITLE, FERRY_MUSIC_TRACK, lastFerryResources } from '../TSoMI/last-ferry/game.ts';
 import type { GameResources } from './engine/game/resources.ts';
 import GamePlayer from './GamePlayer.vue';
 import RoomViewer from './RoomViewer.vue';
@@ -24,7 +25,8 @@ const playSource = shallowRef<GameResources>();
 const localSource = shallowRef<GameResources>();
 const localArchiveName = ref('');
 const audio = shallowRef<BrowserAudio>();
-const selected = ref<'prepared' | 'local'>('prepared');
+const selected = ref<'prepared' | 'local' | 'ferry'>(location.hash === '#ferry' ? 'ferry' : 'prepared');
+const playTitle = ref(MONKEY1_TITLE);
 const launching = ref(false);
 const soundLoading = ref(false);
 const launchError = ref('');
@@ -43,7 +45,8 @@ const loading = ref(false);
 
 function syncScreen() {
   screen.value = currentScreen();
-  if (screen.value !== 'play') showLauncher();
+  if (screen.value !== 'play' || location.hash === '#ferry') showLauncher();
+  if (location.hash === '#ferry') selected.value = 'ferry';
 }
 function openArchive() { error.value = ''; archiveOpen.value = true; }
 
@@ -52,16 +55,25 @@ async function launch() {
   launchError.value = '';
   let device: BrowserAudio | undefined;
   try {
+    const demo = selected.value === 'ferry';
     device = new BrowserAudio(new AudioContext(), tracks.value, monkeyCdTracks, bank.value);
     audio.value = device;
     device.unlock();
-    const [resources] = await Promise.all([
+    const [resources, , art] = await Promise.all([
       selected.value === 'local' ? localSource.value : prepared ?? loadMonkeyPack(monkeyPackUrl),
-      device.prepare(MONKEY1_INTRO_TRACK),
+      device.prepare(demo ? FERRY_MUSIC_TRACK : MONKEY1_INTRO_TRACK),
+      demo ? import('../TSoMI/last-ferry/art.bin?url').then(async ({ default: url }) => {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('COULD NOT LOAD LAST FERRY ART.');
+        return new Uint8Array(await response.arrayBuffer());
+      }) : undefined,
     ]);
     if (!resources) throw new Error('SELECT A GAME ARCHIVE FIRST.');
-    if (selected.value === 'prepared') prepared = resources;
-    if (audio.value === device) playSource.value = resources;
+    if (selected.value !== 'local') prepared = resources;
+    if (audio.value === device) {
+      playTitle.value = demo ? FERRY_TITLE : MONKEY1_TITLE;
+      playSource.value = art ? lastFerryResources(resources, art) : resources;
+    }
   } catch (cause) {
     if (audio.value === device) {
       showLauncher();
@@ -162,15 +174,17 @@ onUnmounted(() => {
 
 <template>
   <RetroScreen>
-    <GamePlayer v-if="screen === 'play' && playSource" :title="MONKEY1_TITLE" :source="playSource" :audio="audio" @menu="showLauncher" />
+    <GamePlayer v-if="screen === 'play' && playSource" :title="playTitle" :source="playSource" :audio="audio" @menu="showLauncher" />
     <section v-else-if="screen === 'play'" class="game-start" aria-label="WebSCUMM start menu" :inert="archiveOpen">
-      <h1><PixelText :text="MONKEY1_TITLE" /></h1>
+      <h1><PixelText :text="selected === 'ferry' ? FERRY_TITLE : MONKEY1_TITLE" /></h1>
       <div class="game-setup">
         <div class="setup-line">
           <PixelText text="GAME DATA" />
           <div class="setup-options">
             <button class="retro-action" type="button" :disabled="launching" :aria-pressed="selected === 'prepared'"
               @click="selected = 'prepared'; launchError = ''"><PixelText text="WEB PACK" /></button>
+            <button class="retro-action" type="button" :disabled="launching" :aria-pressed="selected === 'ferry'"
+              @click="selected = 'ferry'; launchError = ''"><PixelText text="LAST FERRY DEMO" /></button>
             <button v-if="localSource" class="retro-action" type="button" :disabled="launching" :aria-pressed="selected === 'local'"
               @click="selected = 'local'; launchError = ''"><PixelText :text="localArchiveName.toUpperCase().slice(0, 16)" /></button>
             <button class="retro-action" type="button" :disabled="launching" @click="openArchive"><PixelText text="OPEN LOCAL CD DATA" /></button>

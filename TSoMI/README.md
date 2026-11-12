@@ -1,5 +1,9 @@
 # The Secret of Monkey Island
 
+**Last Ferry** is a Russian-language fan prequel. Its room resources and bytecode are in [`last-ferry/`](last-ferry/). The demo uses the original Guybrush costume, Mêlée dock, audio cues and CHAR 1 with the project's Cyrillic glyphs. The new cargo lift joins walk boxes at its stops and moves actors and object artwork together.
+
+Regenerate the demo art with `python TSoMI/last-ferry/draw.py <pixel-art-html-skill>/SKILLS/pixel-art-html TSoMI/last-ferry .local/ferry-art` using the [reviewed Pixel Art HTML revision](https://github.com/gvastethecreator/pixel-art-html-skill/tree/5373810d5cacbbd50c14039ace9d70ebef84e794). The source grids and previews go in `.local/ferry-art`.
+
 [Play](https://akulaflow.ru/webscummtest/) · [Русский README](README.ru.md) · [WebSCUMM](../README.md)
 
 This directory holds the English DOS CD profile, its prepared web assets, exporters, bitmap fonts, and game-specific tests.

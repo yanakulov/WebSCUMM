@@ -27,7 +27,7 @@ export function renderGame(game: ScummGame, pixels: Uint8Array) {
       const image = game.getObjectImage(game.physicalRoom, id, game.objects[id].state);
       const { x, y } = game.positions.get(id) ?? object;
       if (!image) continue;
-      const screenX = x - game.viewX, screenY = y + game.screenTop;
+      const screenX = Math.floor(x) - game.viewX, screenY = Math.floor(y) + game.screenTop;
       drawImage(pixels, image, screenX, screenY, game.screenTop, game.screenBottom);
       if (image.masks.length) occluders.push({ x: screenX, y: screenY, width: image.width, height: image.height, masks: image.masks });
     }

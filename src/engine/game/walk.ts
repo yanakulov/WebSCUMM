@@ -53,7 +53,8 @@ function nextBox(matrix: Uint8Array, from: number, to: number) {
   return 0;
 }
 
-export function walkPath(boxes: WalkBox[], matrix: Uint8Array | undefined, source: Point, destination: Point): Point[] {
+export function walkPath(boxes: WalkBox[], matrix: Uint8Array | undefined, source: Point, destination: Point,
+  connected?: (from: number, to: number) => boolean): Point[] {
   const start = locateBox(boxes, source), end = locateBox(boxes, destination);
   if (!matrix || !start.box || start.box === end.box) return [end.point];
 
@@ -63,7 +64,7 @@ export function walkPath(boxes: WalkBox[], matrix: Uint8Array | undefined, sourc
   while (from !== end.box && !visited.has(from)) {
     visited.add(from);
     const to = nextBox(matrix, from, end.box);
-    if (!to || to > boxes.length || (boxes[to - 1].flags & 0x80)) return route;
+    if (!to || to > boxes.length || (boxes[to - 1].flags & 0x80) || connected?.(from, to) === false) return route;
     const current = boxes[from - 1], next = boxes[to - 1];
     // Project toward the goal, then onto the adjacent box. This also handles line-shaped boxes.
     const goal = closestOnBox(next, end.point);

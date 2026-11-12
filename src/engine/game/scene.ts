@@ -96,7 +96,14 @@ export function readObjectVerbs(archive: GameArchive, object: SceneObject | unde
   return first === table.end ? undefined : { code: disk.bytes.subarray(first, table.end), offsets };
 }
 
-export type Scene = ReturnType<typeof readScene>;
+export type Scene = ReturnType<typeof readScene> & {
+  platform?: {
+    object: number;
+    box: number;
+    // The object and walk box are authored at the first stop.
+    stops: readonly { x: number; y: number; connects: number }[];
+  };
+};
 export type ObjectImage = NonNullable<ReturnType<typeof readObjectImage>>;
 export type ObjectVerbs = NonNullable<ReturnType<typeof readObjectVerbs>>;
 
