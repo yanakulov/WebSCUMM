@@ -27,6 +27,7 @@ On a touchscreen, the cursor keeps its position between swipes. Releasing after 
 
 - **BYLE** is a reconstruction of the costume animation editor. Press **F1** and open **BOUNCE** to try an editable example. The editor imports and exports SCUMM v5 `COST` and editable `.byle.json` files.
 - **Room viewer** displays room backgrounds, walk boxes, and depth masks.
+- **Room paint** opens opaque backgrounds with up to 256 colors for pixel edits and exports indexed PNG. Open it from the room viewer or use [Room paint](https://akulaflow.ru/webscummtest/#paint).
 
 BYLE and the room viewer accept other compatible PC SCUMM v5 archive pairs.
 

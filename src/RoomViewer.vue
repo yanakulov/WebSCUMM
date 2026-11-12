@@ -79,6 +79,7 @@ watchEffect(() => {
   <section class="room-viewer" aria-label="SCUMM room viewer">
     <div class="byle-menu">
       <a href="#byle"><PixelText text="BYLE" /></a>
+      <a href="#paint"><PixelText text="PAINT PNG" /></a>
       <button type="button" @click="emit('importGame')"><PixelText text="OPEN DATA..." /></button>
       <button type="button" :disabled="!game" @click="choosing = true"><PixelText text="SELECT ROOM..." /></button>
       <PixelText v-if="roomName" :text="roomName.slice(0, 22)" />

@@ -1,12 +1,26 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { inflateSync } from 'node:zlib';
 import { blankCostume, celFromSurface, flood, parseProject, practiceCostume, stroke } from '../src/byle/project.ts';
 import { Binary } from '../src/engine/binary.ts';
 import { readMonochromeCharset, replaceMonochromeGlyphs } from '../src/engine/charset.ts';
 import { readCostumeFile } from '../src/engine/costume.ts';
 import { writeCostume } from '../src/engine/costume-writer.ts';
 import { decodeSmap } from '../src/engine/room.ts';
+import { indexedPng, indexOpaquePixels } from '../src/indexed-png.ts';
 import { drawChore } from '../src/render.ts';
+
+test('room paint exports opaque pixels on the original indexed PNG grid', async () => {
+  const data = Uint8ClampedArray.of(3, 7, 19, 255, 247, 201, 75, 255, 247, 201, 75, 255, 3, 7, 19, 255);
+  const { pixels, palette } = indexOpaquePixels(data);
+  const png = Buffer.from(await (await indexedPng(2, 2, pixels, palette)).arrayBuffer());
+  assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20), png[24], png[25]], [2, 2, 8, 3]);
+  assert.equal(png.toString('ascii', 37, 41), 'PLTE');
+  assert.deepEqual([...png.subarray(41, 47)], [3, 7, 19, 247, 201, 75]);
+  assert.equal(png.toString('ascii', 55, 59), 'IDAT');
+  assert.deepEqual([...inflateSync(png.subarray(59, 59 + png.readUInt32BE(51)))], [0, 0, 1, 0, 1, 0]);
+  assert.throws(() => indexOpaquePixels(Uint8ClampedArray.of(1, 2, 3, 127)), /opaque/);
+});
 
 test('SMAP vertical strips scatter into rows and reject truncated streams', () => {
   const bytes = Uint8Array.of(83, 77, 65, 80, 0, 0, 0, 17, 12, 0, 0, 0, 14, 3, 3, 0, 0);
