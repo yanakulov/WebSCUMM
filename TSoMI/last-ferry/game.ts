@@ -4,7 +4,7 @@ import type { GameResources } from '../../src/engine/game/resources.ts';
 import type { ObjectImage, Scene, SceneObject } from '../../src/engine/game/scene.ts';
 import type { RGB, WalkBox } from '../../src/engine/room.ts';
 import { char1Russian, char1RussianSlots, encodeChar1RussianText } from '../fonts/char1-russian.ts';
-import { atlas, palette } from './art-data.ts';
+import { atlas, atlasSize, palette } from './art-data.ts';
 import { Item, Room, objectScript, roomScripts, scripts } from './scripts.ts';
 
 export const FERRY_TITLE = 'GUYBRUSH AND THE LAST FERRY';
@@ -13,9 +13,9 @@ export const FERRY_MUSIC_TRACK = 4;
 const w = 320, h = 144;
 const o = Item, r = Room;
 const roomPixels = w * h;
-const sheetWidth = 160;
+const [sheetWidth, sheetHeight] = atlasSize;
 const sheetStart = 4 * roomPixels;
-const artLength = sheetStart + sheetWidth * 112;
+const artLength = sheetStart + sheetWidth * sheetHeight;
 
 const box = (x: number, y: number, right: number, bottom: number, scale = 215, mask = 0): WalkBox =>
   ({ points: [[x, y], [right, y], [right, bottom], [x, bottom]], mask, flags: 0, scale });
@@ -82,20 +82,22 @@ export function lastFerryResources(original: GameResources, art: Uint8Array): Ga
     [o.shutter]: [sprite('shutter')],
     [o.lift]: [sprite('lift')],
     [o.beam]: [beam],
-    [o.leak]: [sprite('leak0'), sprite('leak1'), sprite('patch')],
+    [o.leak]: [sprite('leak0'), sprite('leak1'), sprite('leak2'), sprite('patch')],
     [o.rope]: [sprite('rope')],
   };
 
   const costume = (name: 'skipper' | 'clerk' | 'crab'): Costume => {
-    const frames = (name === 'crab' ? [0, 1, 2] : [0, 1, 2, 3]).map(i => sprite((name + i) as keyof typeof atlas));
+    const isCrab = name === 'crab';
+    const frames = Array.from({ length: isCrab ? 4 : 8 }, (_, i) => sprite((name + i) as keyof typeof atlas));
     const cels: Record<number, Cel> = frames.map(({ width, height, pixels }) =>
       ({ width, height, x: -Math.floor(width / 2), y: -height + 1, moveX: 0, moveY: 0, pixels: [...pixels] }));
-    const poses = [[0], [0, 1, 2, 1], [0], [0, 1, 0], [0], [2, 3, 2, 0]];
+    const idle = isCrab ? [0] : [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0];
+    const gesture = name === 'skipper' ? [4, 4, 5, 6, 6, 7, 0] : [4, 4, 5, 6, 7, 0];
+    const poses = isCrab ? [[0], [0, 1, 2, 3], [0]] : [idle, [0], idle, [0, 2, 3, 2, 0, 2], idle, gesture];
     const chores: Costume['chores'] = {};
     for (let i = 0; i < poses.length; i++) {
       for (let direction = 0; direction < 4; direction++) {
-        const animation = poses[i].filter(cel => cel < frames.length);
-        chores[(i + 1) * 4 + direction] = { tracks: [{ cels: animation, loop: i === 1 || i === 3 }] };
+        chores[(i + 1) * 4 + direction] = { tracks: [{ cels: poses[i], loop: i !== 5 }] };
       }
     }
     return { version: 1, name, palette: colors, limbs: [cels], chores, sourceFacing: false };
@@ -132,7 +134,7 @@ export function lastFerryResources(original: GameResources, art: Uint8Array): Ga
     ]),
     [r.clerk]: setObjects(clerk, [
       hotspot(o.shutter, '', 146, 61, 55, 24, 179, 110, 3),
-      hotspot(o.clerk, 'Кладовщик', 126, 31, 100, 75, 179, 110, 3),
+      hotspot(o.clerk, 'Кладовщик', 126, 31, 100, 75, 158, 112, 3),
       hotspot(o.back, 'Выход', 0, 68, 24, 69, 12, 121, 0),
       hotspot(o.warehouse, 'Склад', 284, 62, 35, 58, 300, 119, 3),
     ]),

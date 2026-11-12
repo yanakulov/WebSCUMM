@@ -4,6 +4,8 @@
 
 Пересобрать графику можно командой `python TSoMI/last-ferry/draw.py <pixel-art-html-skill>/SKILLS/pixel-art-html TSoMI/last-ferry .local/ferry-art` с [проверенной ревизией Pixel Art HTML](https://github.com/gvastethecreator/pixel-art-html-skill/tree/5373810d5cacbbd50c14039ace9d70ebef84e794). Исходные сетки и превью сохраняются в `.local/ferry-art`.
 
+Четыре фона имеют размер 320×144. Кадры паромщика и кладовщика занимают 38×47 пикселей с опорой на строке 46. Игровой скрипт циклически меняет четыре цвета волн и блики фонарей в индексированной палитре.
+
 [Играть](https://akulaflow.ru/webscummtest/) · [English README](README.md) · [WebSCUMM](../README.ru.md)
 
 Здесь находятся настройки английской DOS CD-версии, веб-пакет, экспортёры, шрифты и тесты игры.

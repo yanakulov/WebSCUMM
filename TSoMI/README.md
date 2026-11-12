@@ -4,6 +4,8 @@
 
 Regenerate the demo art with `python TSoMI/last-ferry/draw.py <pixel-art-html-skill>/SKILLS/pixel-art-html TSoMI/last-ferry .local/ferry-art` using the [reviewed Pixel Art HTML revision](https://github.com/gvastethecreator/pixel-art-html-skill/tree/5373810d5cacbbd50c14039ace9d70ebef84e794). The source grids and previews go in `.local/ferry-art`.
 
+The four backgrounds are 320×144. The ferryman and clerk use 38×47 animation cells with the feet anchored on row 46. A room script cycles four wave colors and the lantern highlights in the indexed palette.
+
 [Play](https://akulaflow.ru/webscummtest/) · [Русский README](README.ru.md) · [WebSCUMM](../README.md)
 
 This directory holds the English DOS CD profile, its prepared web assets, exporters, bitmap fonts, and game-specific tests.

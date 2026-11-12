@@ -1,5 +1,6 @@
 import { VAR } from '../../src/engine/game/vm.ts';
 import { encodeChar1RussianText } from '../fonts/char1-russian.ts';
+import { animated, palette } from './art-data.ts';
 
 export const Room = { office: 1, clerk: 2, warehouse: 3, crossing: 4, melee: 5 } as const;
 export const Item = {
@@ -152,26 +153,40 @@ const setup = bytecode([
   0x13, 3, 1, 202, 12, 14, 19, 1, 22, 3, 255,
   0x13, 4, 1, 203, 2, 3, 2, 20, 255,
   ...place(2, r.office, 266, 115, 0),
-  ...place(3, r.clerk, 183, 104, 0),
+  ...place(3, r.clerk, 190, 104, 2),
   ...place(4, r.office, 241, 121, 1),
   ...verbs.flatMap(([id, x, y]) => verb(id, names[id], x, y)),
   ...verb(v.walk, names[v.walk], 0, 200), // Displayed through verb 100.
   ...verb(100, names[v.walk], 160, 146, 5, true),
-  ...start(3), ...start(4), ...sound(103),
+  ...start(3), ...start(4), ...start(6), ...sound(103),
   ...cursor(true), ...enter(r.office, 53, 128),
 ]);
 
 const animation = bytecode([
-  ...pause(16),
-  ...eq(VAR.room, r.warehouse, eq(Repaired, 0, state(o.leak, 2))),
+  ...pause(35),
   ...eq(VAR.room, r.office, [
-    ...pose(2, 6),
-    ...eq(Paid, 0, [0x1e, 4, ...word(285), ...word(122)]),
+    ...eq(VAR.message, 0, pose(2, 6)),
+    0x1e, 4, ...word(285), ...word(122),
   ]),
-  ...pause(45),
-  ...eq(VAR.room, r.warehouse, eq(Repaired, 0, state(o.leak, 1))),
+  ...eq(VAR.room, r.warehouse, eq(Repaired, 0, eq(VAR.message, 0, pose(2, 6)))),
+  ...pause(78),
   ...eq(VAR.room, r.office, [0x1e, 4, ...word(243), ...word(121)]),
   0x42, 4, 255,
+]);
+
+const waves = [animated.wave0, animated.wave1, animated.wave2, animated.wave3];
+const changeColor = (slot: number, rgb: number[]): Code => [0x33, 4, ...rgb.flatMap(word), 0, slot];
+const environment = bytecode([
+  ...waves.flatMap((_, step) => [
+    ...ne(VAR.room, r.melee, [
+      ...ne(VAR.room, r.clerk, waves.flatMap((slot, i) => changeColor(slot, palette[waves[(i + step) % waves.length] - 32]))),
+      ...changeColor(animated.flame0, palette[animated.flame0 - 32].map(value => value - step * 3)),
+      ...changeColor(animated.flame1, palette[animated.flame1 - 32].map(value => value - step * 3)),
+      ...eq(VAR.room, r.warehouse, eq(Repaired, 0, state(o.leak, step % 3 + 1))),
+    ]),
+    ...pause(8),
+  ]),
+  0x42, 6, 255,
 ]);
 
 const hoist = (to: number): Code => [
@@ -201,7 +216,7 @@ const passageCode: Code = [
 passageCode.splice(9, 2, ...word(passageCode.length - 11));
 const crossing = bytecode([...passageCode, 0xc0, ...cursor(true), ...enter(r.melee, 228, 132, 0)]);
 
-export const scripts: Record<number, Uint8Array> = { 1: setup, 2: input, 3: ui, 4: animation, 5: moveLift };
+export const scripts: Record<number, Uint8Array> = { 1: setup, 2: input, 3: ui, 4: animation, 5: moveLift, 6: environment };
 export const roomScripts: Partial<Record<number, Uint8Array>> = { [r.crossing]: crossing,
   [r.warehouse]: bytecode([...set(Floor, 0), ...place(2, r.warehouse, 301, 126, 0)]),
 };
@@ -234,7 +249,8 @@ const talkClerk = [
 ];
 const fileReceipt = [
   ...eq(First, o.receipt, [
-    ...cursor(false), ...set(Filed, 1), ...give(o.receipt, false), ...pose(3, 6), ...sound(9), ...state(o.shutter, 1), ...pause(20),
+    ...cursor(false), ...set(Filed, 1), ...give(o.receipt, false), ...pose(3, 6), ...pause(24),
+    ...sound(9), ...state(o.shutter, 1), ...pause(20),
     ...state(o.shutter, 0), ...conversation(carryAsCargo,
       speak(3, 'Рукоятка от подъёмника. В складе её опять кто-то вынул.'),
       give(o.tag, true), give(o.handle, true)), ...end,
@@ -244,7 +260,7 @@ const fileReceipt = [
 const repair = [
   ...eq(Repaired, 1, [...conversation(says('Держится. Для временного ремонта это почти вечность.')), ...end]),
   ...eq(First, o.plug, [
-    ...set(Repaired, 1), ...give(o.plug, false), ...state(o.leak, 3), ...sound(9),
+    ...set(Repaired, 1), ...give(o.plug, false), ...state(o.leak, 4), ...sound(9),
     ...conversation(speak(2, 'Кружка сухая. Даже странно.')), ...end]),
   ...conversation(says('Сюда нужна деревянная пробка.')),
 ];
