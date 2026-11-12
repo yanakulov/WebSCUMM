@@ -17,8 +17,9 @@ import { FERRY_TITLE, FERRY_MUSIC_TRACK, lastFerryResources } from '../TSoMI/las
 import type { GameResources } from './engine/game/resources.ts';
 import GamePlayer from './GamePlayer.vue';
 import RoomViewer from './RoomViewer.vue';
+import RoomPaint from './RoomPaint.vue';
 
-const currentScreen = () => location.hash === '#rooms' ? 'rooms' : location.hash === '#byle' ? 'byle' : 'play';
+const currentScreen = () => location.hash === '#paint' ? 'paint' : location.hash === '#rooms' ? 'rooms' : location.hash === '#byle' ? 'byle' : 'play';
 const screen = ref(currentScreen());
 const game = shallowRef<GameArchive>();
 const playSource = shallowRef<GameResources>();
@@ -173,7 +174,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <RetroScreen>
+  <RoomPaint v-show="screen === 'paint'" />
+  <RetroScreen v-show="screen !== 'paint'">
     <GamePlayer v-if="screen === 'play' && playSource" :title="playTitle" :source="playSource" :audio="audio" @menu="showLauncher" />
     <section v-else-if="screen === 'play'" class="game-start" aria-label="WebSCUMM start menu" :inert="archiveOpen">
       <h1><PixelText :text="selected === 'ferry' ? FERRY_TITLE : MONKEY1_TITLE" /></h1>
