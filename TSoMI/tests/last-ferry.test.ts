@@ -5,6 +5,7 @@ import { gunzipSync } from 'node:zlib';
 import { ScummGame } from '../../src/engine/game/game.ts';
 import { hitVerb, renderGame, WIDTH, HEIGHT } from '../../src/engine/game/render.ts';
 import { VAR } from '../../src/engine/game/vm.ts';
+import { animated } from '../last-ferry/art-data.ts';
 import { lastFerryResources } from '../last-ferry/game.ts';
 import { Item, Room, Verb } from '../last-ferry/scripts.ts';
 import { parseMonkeyPack } from '../pack.ts';
@@ -12,6 +13,29 @@ import { parseMonkeyPack } from '../pack.ts';
 const read = (path: string) => readFileSync(new URL(path, import.meta.url));
 const original = parseMonkeyPack(gunzipSync(read('../assets/monkey1.wsc.gz')));
 const source = lastFerryResources(original, read('../last-ferry/art.bin'));
+
+test('Last Ferry animates water and the skipper in the native renderer', () => {
+  const game = new ScummGame(source, () => 0.5);
+  game.boot();
+  const skipper = game.actor(2);
+  const origin = [skipper.x, skipper.y];
+  const pixels = new Uint8Array(WIDTH * HEIGHT);
+  const colors = new Set<string>();
+  const poses = new Set<string>();
+  for (let tick = 0; tick < 38; tick++) {
+    game.advance(1 / 15);
+    assert.equal(game.error, '');
+    assert.deepEqual([skipper.x, skipper.y], origin);
+    colors.add(game.palette[animated.wave0].join(','));
+    renderGame(game, pixels);
+    poses.add(Array.from({ length: 40 }, (_, row) => {
+      const start = (row + 76) * WIDTH + 249;
+      return pixels.subarray(start, start + 33).join(',');
+    }).join('/'));
+  }
+  assert.equal(colors.size, 4);
+  assert.ok(poses.size >= 4);
+});
 
 test('Last Ferry plays through the native verbs, cargo lift, ferry and original Mêlée arrival', () => {
   const game = new ScummGame(source, () => 0.5);
@@ -80,6 +104,7 @@ test('Last Ferry plays through the native verbs, cargo lift, ferry and original 
   wait(idle);
   act(Verb.use, Item.leak, 204);
   assert.deepEqual(game.inventory(1), [Item.tag]);
+  assert.equal(game.objects[Item.leak].state, 4);
   act(Verb.give, Item.skipper, 202);
   act(Verb.pull, Item.rope);
   clickObject(Item.boarding);
