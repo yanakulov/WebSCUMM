@@ -73,6 +73,8 @@ export class ScummGame {
   cameraTarget = 160;
   followedActor?: number;
   private cameraCatchingUp = false;
+  private platformStop = 0;
+  private platformDestination?: number;
   screenTop = 0;
   screenBottom = 200;
   charset = 1;
@@ -156,6 +158,7 @@ export class ScummGame {
     }
     this.processSoundCommands();
     if (!this.room) return;
+    this.stepPlatform(delta);
     for (const actor of this.actors.values()) if (actor.room === this.room) this.stepActor(actor);
     this.moveCamera();
   }
@@ -209,11 +212,21 @@ export class ScummGame {
       this.vm.runRoomCode('EXCD', this.physicalRoom);
       this.vm.start(vars[VAR.exit2]);
       this.vm.leaveRoom(this.physicalRoom);
+      const platform = this.scene?.platform;
+      const position = platform && this.positions.get(platform.object);
+      if (platform && position && this.scene) {
+        for (const point of this.scene.boxes[platform.box - 1].points) {
+          point[0] -= position.x - platform.stops[0].x;
+          point[1] -= position.y - platform.stops[0].y;
+        }
+      }
     }
     this.room = vars[VAR.room] = id;
     this.physicalRoom = vars[VAR.roomResource] = physical;
     this.scene = scene;
     this.positions.clear();
+    this.platformStop = 0;
+    this.platformDestination = undefined;
     this.fills.length = 0;
     this.caption = undefined;
     this.clearMessage();
@@ -376,10 +389,55 @@ export class ScummGame {
 
   walk(actor: Actor, x: number, y: number, direction?: number) {
     const boxes = actor.ignoreBoxes ? [] : this.scene?.boxes ?? [];
-    actor.path = walkPath(boxes, this.scene?.matrix, actor, { x, y });
+    const platform = this.scene?.platform;
+    actor.path = walkPath(boxes, this.scene?.matrix, actor, { x, y }, platform && ((from, to) => {
+      if (from !== platform.box && to !== platform.box) return true;
+      return !this.platformMoving && (from === platform.box ? to : from) === platform.stops[this.platformStop].connects;
+    }));
     actor.targetDirection = direction;
     this.nextWalkPoint(actor);
     if (actor.target && actor.chore !== actor.walkChore) this.chore(actor, actor.walkChore);
+  }
+
+  get platformMoving() { return this.platformDestination !== undefined; }
+
+  movePlatform(stop: number) {
+    if (!this.scene?.platform?.stops[stop] || stop === this.platformStop || this.platformMoving) return;
+    this.platformDestination = stop;
+    for (const actor of this.actors.values()) {
+      if (actor.room !== this.room || actor.ignoreBoxes) continue;
+      const { boxes, platform } = this.scene;
+      const route = actor.target ? [actor.target, ...actor.path] : [];
+      if (actor.walkBox === platform.box || route.some(point => locateBox(boxes, point).box === platform.box)) {
+        actor.path = [];
+        actor.target = undefined;
+        this.chore(actor, actor.standChore);
+      }
+    }
+  }
+
+  private stepPlatform(delta: number) {
+    const scene = this.scene;
+    const platform = scene?.platform;
+    const stop = this.platformDestination;
+    if (!scene || !platform || stop === undefined) return;
+    const origin = this.positions.get(platform.object) ?? platform.stops[this.platformStop];
+    const end = platform.stops[stop];
+    const distance = Math.max(Math.abs(end.x - origin.x), Math.abs(end.y - origin.y));
+    const fraction = Math.min(1, delta / 4 / Math.max(1, distance));
+    const dx = (end.x - origin.x) * fraction, dy = (end.y - origin.y) * fraction;
+    this.positions.set(platform.object, { x: origin.x + dx, y: origin.y + dy });
+    for (const point of scene.boxes[platform.box - 1].points) { point[0] += dx; point[1] += dy; }
+    for (const actor of this.actors.values()) {
+      if (actor.room === this.room && !actor.ignoreBoxes && actor.walkBox === platform.box) {
+        actor.x += dx;
+        actor.y += dy;
+      }
+    }
+    if (fraction === 1) {
+      this.platformStop = stop;
+      this.platformDestination = undefined;
+    }
   }
 
   private nextWalkPoint(actor: Actor) {

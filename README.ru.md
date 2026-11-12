@@ -1,5 +1,7 @@
 # WebSCUMM
 
+[**Последний паром**](https://akulaflow.ru/webscummtest/#ferry) — короткая фанатская предыстория о том, как Гайбраш попал на Мêlée. Для запуска выберите **LAST FERRY DEMO** и **PLAY**. Новые комнаты, костюмы и загадки работают в том же проигрывателе SCUMM, что и оригинальная игра.
+
 [Играть](https://akulaflow.ru/webscummtest/) · [BYLE](https://akulaflow.ru/webscummtest/#byle) · [Просмотрщик комнат](https://akulaflow.ru/webscummtest/#rooms) · [English README](README.md)
 
 TypeScript-движок и браузерные инструменты для SCUMM. Игровой режим пока запускает английскую DOS CD-версию **The Secret of Monkey Island**. Интерфейс собран на Vue и Vite, как в [WebKyra](https://github.com/yanakulov/WebKyra).

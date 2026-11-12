@@ -1,6 +1,7 @@
 import { createReadStream } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import vue from '@vitejs/plugin-vue';
 import { defineConfig } from 'vite';
 
@@ -10,6 +11,16 @@ export default defineConfig({
   plugins: [vue(), {
     name: 'local-scumm-archive',
     async configureServer(server) {
+      const webPack = '/TSoMI/assets/monkey1.wsc.gz';
+      const packedFile = fileURLToPath(new URL(`.${webPack}`, import.meta.url));
+      server.middlewares.use((request, response, next) => {
+        if (request.method !== 'GET' || request.url !== webPack) return next();
+        // Vite otherwise labels this resource as HTTP gzip instead of returning the packed bytes.
+        const stream = createReadStream(packedFile);
+        stream.once('error', () => response.destroy());
+        response.setHeader('Content-Type', 'application/octet-stream');
+        stream.pipe(response);
+      });
       const directory = process.env.WEBSCUMM_GAME_DIR;
       if (!directory) return;
       const names = await readdir(directory).catch(() => [] as string[]);

@@ -57,6 +57,10 @@ export function executeOpcode(vm: ScummVM, s: Script, opcode: number, offset: nu
         case 2: waiting = !!g.message; break;
         case 3: waiting = Math.floor(g.camera / 8) !== Math.floor(g.cameraTarget / 8); break;
         case 4: waiting = g.sentencePending; break;
+        case 5:
+          if (!g.scene?.platform) unsupported('wait operation', mode);
+          waiting = g.platformMoving;
+          break;
         default: unsupported('wait operation', mode);
       }
       if (waiting) { s.pc = offset; s.yielded = true; }
@@ -323,6 +327,10 @@ function roomOps(vm: ScummVM, s: Script) {
       }
       return;
     }
+    case 31:
+      if (!g.scene?.platform) unsupported('room operation', mode);
+      g.movePlatform(b());
+      return;
     default: unsupported('room operation', mode);
   }
 }

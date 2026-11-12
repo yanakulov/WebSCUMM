@@ -1,5 +1,9 @@
 # The Secret of Monkey Island
 
+Комнаты и байткод «Последнего парома» лежат в [`last-ferry/`](last-ferry/). Демо использует оригинальные костюм Гайбраша, пристань Мêlée, звук и CHAR 1 с кириллицей WebSCUMM. Грузовой подъёмник соединяет зоны ходьбы на остановках и переносит актёров вместе с платформой.
+
+Пересобрать графику можно командой `python TSoMI/last-ferry/draw.py <pixel-art-html-skill>/SKILLS/pixel-art-html TSoMI/last-ferry .local/ferry-art` с [проверенной ревизией Pixel Art HTML](https://github.com/gvastethecreator/pixel-art-html-skill/tree/5373810d5cacbbd50c14039ace9d70ebef84e794). Исходные сетки и превью сохраняются в `.local/ferry-art`.
+
 [Играть](https://akulaflow.ru/webscummtest/) · [English README](README.md) · [WebSCUMM](../README.ru.md)
 
 Здесь находятся настройки английской DOS CD-версии, веб-пакет, экспортёры, шрифты и тесты игры.
